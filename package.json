@@ -1,0 +1,53 @@
+{
+  "name": "grpc-pipe",
+  "version": "0.0.1",
+  "description": "A type-safe GRPC Pipe System for Bun & Node.js",
+  "main": "lib/index.js",
+  "types": "types/index.d.ts",
+  "files": [
+    "lib/**/*",
+    "types/**/*",
+    "proto/**/*"
+  ],
+  "author": "ACO .",
+  "homepage": "https://github.com/acoBOYZ/@grpc-pipe",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/acoBOYZ/@grpc-pipe.git"
+  },
+  "bugs": {
+    "url": "https://github.com/acoBOYZ/@grpc-pipe/issues"
+  },
+  "keywords": [
+    "grpc",
+    "pipe",
+    "communication",
+    "nodejs",
+    "bun",
+    "typescript",
+    "type-safe",
+    "fast"
+  ],
+  "license": "GPL-3.0",
+  "engines": {
+    "node": ">=18",
+    "bun": ">=1.0.0"
+  },
+  "scripts": {
+    "clean": "rm -rf ./types ./lib ./docs src/types/pipe",
+    "build": "bun run clean && tsc",
+    "proto:compile": "protoc --ts_proto_out=src/types --ts_proto_opt=outputServices=grpc-js --proto_path=proto proto/*.proto",
+    "doc": "typedoc --entryPoints src/index.ts --out docs",
+    "prepare": "bun run build"
+  },
+  "devDependencies": {
+    "@bufbuild/protobuf": "^2.2.5",
+    "@grpc/grpc-js": "^1.13.3",
+    "@grpc/proto-loader": "^0.7.15",
+    "@types/bun": "^1.2.10",
+    "@types/node": "^22.15.2",
+    "fastq": "^1.19.1",
+    "rxjs": "^7.8.2",
+    "typescript": "^5.8.3"
+  }
+}

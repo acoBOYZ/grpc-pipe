@@ -1,0 +1,20 @@
+// src/proto/pipe.proto
+
+syntax = "proto3";
+
+package pipe;
+
+/**
+ * The PipeMessage structure for sending typed data.
+ */
+message PipeMessage {
+  string type = 1;
+  bytes payload = 2;
+}
+
+/**
+ * The PipeService using bidirectional streaming.
+ */
+service PipeService {
+  rpc Communicate (stream PipeMessage) returns (stream PipeMessage);
+}
