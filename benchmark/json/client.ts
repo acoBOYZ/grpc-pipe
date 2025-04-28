@@ -31,41 +31,11 @@ function nowMs() {
   return Date.now();
 }
 
-// Generate a big, deeply nested user profile object
-function generateBigPayload(id: string): UserProfile {
-  return {
-    id,
-    username: `user_${id}`,
-    email: `user${id}@example.com`,
-    bio: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
-    settings: {
-      theme: Math.random() > 0.5 ? "light" : "dark",
-      notifications: {
-        email: true,
-        sms: false,
-        push: true,
-      },
-    },
-    stats: {
-      posts: Math.floor(Math.random() * 1000),
-      followers: Math.floor(Math.random() * 10000),
-      following: Math.floor(Math.random() * 500),
-      createdAt: new Date().toISOString(),
-    },
-    posts: Array.from({ length: 10 }, (_, i) => ({
-      id: `${id}-${i}`,
-      title: `Post Title ${i}`,
-      content: "Content here...".repeat(50),
-      likes: Math.floor(Math.random() * 500),
-      tags: ["benchmark", "test", "data"],
-    })),
-  };
-}
-
 function connectToServer(address: string) {
   const client = new GrpcPipeClient<ClientSend, ClientReceive>({
     address,
     reconnectDelayMs: 2000,
+    compression: true
   });
 
   client.on('connected', (pipe: PipeHandler<ClientSend, ClientReceive>) => {
@@ -136,4 +106,34 @@ function printResults() {
 // Connect to all servers
 for (const address of serverAddresses) {
   connectToServer(address);
+}
+
+function generateBigPayload(id: string): UserProfile {
+  return {
+    id,
+    username: `user_${id}`,
+    email: `user${id}@example.com`,
+    bio: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+    settings: {
+      theme: Math.random() > 0.5 ? "light" : "dark",
+      notifications: {
+        email: true,
+        sms: false,
+        push: true,
+      },
+    },
+    stats: {
+      posts: Math.floor(Math.random() * 1000),
+      followers: Math.floor(Math.random() * 10000),
+      following: Math.floor(Math.random() * 500),
+      createdAt: new Date().toISOString(),
+    },
+    posts: Array.from({ length: 10 }, (_, i) => ({
+      id: `${id}-${i}`,
+      title: `Post Title ${i}`,
+      content: "Content here...".repeat(50),
+      likes: Math.floor(Math.random() * 500),
+      tags: ["benchmark", "test", "data"],
+    })),
+  };
 }

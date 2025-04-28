@@ -1,6 +1,6 @@
 {
   "name": "grpc-pipe",
-  "version": "0.0.1",
+  "version": "0.1.1",
   "description": "A type-safe GRPC Pipe System for Bun & Node.js",
   "main": "lib/index.js",
   "types": "types/index.d.ts",
@@ -45,7 +45,7 @@
     "@grpc/grpc-js": "^1.13.3",
     "@grpc/proto-loader": "^0.7.15",
     "@types/bun": "^1.2.10",
-    "@types/node": "^22.15.2",
+    "@types/node": "^22.15.3",
     "fastq": "^1.19.1",
     "rxjs": "^7.8.2",
     "typescript": "^5.8.3"

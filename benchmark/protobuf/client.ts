@@ -30,6 +30,7 @@ function connectToServer(address: string) {
   const client = new GrpcPipeClient<ClientSend, ClientReceive>({
     address,
     reconnectDelayMs: 2000,
+    compression: true,
   });
 
   client.on('connected', (pipe: PipeHandler<ClientSend, ClientReceive>) => {
@@ -74,7 +75,7 @@ function startSending(address: string, pipe: PipeHandler<ClientSend, ClientRecei
       return;
     }
 
-    const fakeUserProfile = generateFakeUserProfile(`${address}-${sent}`);
+    const fakeUserProfile = generateBigPayload(`${address}-${sent}`);
     pending.set(fakeUserProfile.id, nowMs());
     pipe.post('ping', { message: fakeUserProfile });
     sent++;
@@ -106,14 +107,14 @@ for (const address of serverAddresses) {
 // --- Helper: fake UserProfile generator
 import { UserProfile } from '../json/data';
 
-function generateFakeUserProfile(id: string): UserProfile {
+function generateBigPayload(id: string): UserProfile {
   return {
     id,
     username: `user_${id}`,
-    email: `user_${id}@test.com`,
-    bio: "This is a sample user profile.",
+    email: `user${id}@example.com`,
+    bio: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
     settings: {
-      theme: "dark",
+      theme: Math.random() > 0.5 ? "light" : "dark",
       notifications: {
         email: true,
         sms: false,
@@ -121,17 +122,17 @@ function generateFakeUserProfile(id: string): UserProfile {
       },
     },
     stats: {
-      posts: 42,
-      followers: 1234,
-      following: 567,
+      posts: Math.floor(Math.random() * 1000),
+      followers: Math.floor(Math.random() * 10000),
+      following: Math.floor(Math.random() * 500),
       createdAt: new Date().toISOString(),
     },
-    posts: new Array(5).fill(null).map((_, idx) => ({
-      id: `${id}-post-${idx}`,
-      title: `Post #${idx}`,
-      content: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
-      likes: Math.floor(Math.random() * 1000),
-      tags: ["test", "benchmark"],
+    posts: Array.from({ length: 10 }, (_, i) => ({
+      id: `${id}-${i}`,
+      title: `Post Title ${i}`,
+      content: "Content here...".repeat(50),
+      likes: Math.floor(Math.random() * 500),
+      tags: ["benchmark", "test", "data"],
     })),
   };
 }

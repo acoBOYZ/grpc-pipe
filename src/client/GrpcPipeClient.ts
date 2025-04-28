@@ -8,6 +8,8 @@ import { TypedEventEmitter } from '../core/TypedEventEmitter';
 export interface GrpcPipeClientOptions {
   address: string;
   reconnectDelayMs?: number;
+  compression?: boolean;
+  backpressureThresholdBytes?: number;
 }
 
 interface GrpcPipeClientEvents<SendMap, ReceiveMap> {
@@ -20,11 +22,15 @@ interface GrpcPipeClientEvents<SendMap, ReceiveMap> {
 export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcPipeClientEvents<SendMap, ReceiveMap>> {
   private client?: Client;
   private readonly reconnectDelayMs: number;
+  private readonly compression: boolean;
+  private readonly backpressureThresholdBytes: number;
   private connected: boolean = false;
 
   constructor(private options: GrpcPipeClientOptions) {
     super();
     this.reconnectDelayMs = options.reconnectDelayMs ?? 2000;
+    this.compression = options.compression ?? false;
+    this.backpressureThresholdBytes = options.backpressureThresholdBytes ?? 5 * 1024 * 1024;
     this.connect();
   }
 
@@ -38,7 +44,10 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
     );
 
     const transport = new GrpcClientTransport(stream);
-    const pipe = new PipeHandler<SendMap, ReceiveMap>(transport);
+    const pipe = new PipeHandler<SendMap, ReceiveMap>(transport, undefined, {
+      compression: this.compression,
+      backpressureThresholdBytes: this.backpressureThresholdBytes,
+    });
 
     stream.on('metadata', () => {
       if (!this.connected) {

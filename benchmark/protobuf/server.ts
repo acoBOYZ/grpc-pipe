@@ -6,7 +6,7 @@ type ServerSend = InferSend<typeof benchmarkServerRegistry>;
 type ServerReceive = InferReceive<typeof benchmarkServerRegistry>;
 
 const port = parseInt(process.env.PORT || '50061', 10);
-const server = new GrpcPipeServer<ServerSend, ServerReceive>({ port });
+const server = new GrpcPipeServer<ServerSend, ServerReceive>({ port, compression: true });
 
 server.on('connection', (pipe) => {
   pipe.useSchema(benchmarkServerRegistry);
@@ -14,7 +14,7 @@ server.on('connection', (pipe) => {
   console.log(`[SERVER ${port}] New client connected.`);
 
   pipe.on('ping', (data) => {
-    console.log(`[SERVER ${port}] Received ping:`, data);
+    // console.log(`[SERVER ${port}] Received ping:`, data);
     pipe.post('pong', { message: data.message });
   });
 });

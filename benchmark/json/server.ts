@@ -13,7 +13,7 @@ interface ServerReceive {
 }
 
 const port = parseInt(process.env.PORT || '50051', 10);
-const server = new GrpcPipeServer<ServerSend, ServerReceive>({ port });
+const server = new GrpcPipeServer<ServerSend, ServerReceive>({ port, compression: true });
 
 // Track connected clients
 const clients = new Set<any>();
@@ -24,8 +24,8 @@ server.on('connection', (pipe) => {
   clients.add(pipe);
 
   pipe.on('ping', (data) => {
-    console.log(`[SERVER ${port}] Received ping:`, data);
-    pipe.post('pong', { message: data.message }); // 🚀 Just echo back the same data
+    // console.log(`[SERVER ${port}] Received ping:`, data);
+    pipe.post('pong', { message: data.message });
   });
 });
 
