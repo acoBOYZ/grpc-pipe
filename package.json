@@ -10,13 +10,13 @@
     "proto/**/*"
   ],
   "author": "ACO .",
-  "homepage": "https://github.com/acoBOYZ/@grpc-pipe",
+  "homepage": "https://github.com/acoBOYZ/grpc-pipe",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/acoBOYZ/@grpc-pipe.git"
+    "url": "git+https://github.com/acoBOYZ/grpc-pipe.git"
   },
   "bugs": {
-    "url": "https://github.com/acoBOYZ/@grpc-pipe/issues"
+    "url": "https://github.com/acoBOYZ/grpc-pipe/issues"
   },
   "keywords": [
     "grpc",
