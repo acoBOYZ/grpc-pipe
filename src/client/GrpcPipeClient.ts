@@ -1,18 +1,23 @@
-import { EventEmitter } from 'events';
+// src/client/GrpcPipeClient.ts
 import { Client, credentials } from '@grpc/grpc-js';
 import { GrpcClientTransport } from '../transports/GrpcClientTransport';
 import { PipeHandler } from '../core/PipeHandler';
 import { PipeMessage } from '../types/pipe';
+import { TypedEventEmitter } from '../core/TypedEventEmitter';
 
 export interface GrpcPipeClientOptions {
   address: string;
   reconnectDelayMs?: number;
 }
 
-/**
- * GrpcPipeClient connects to a GrpcPipeServer and manages the pipe
- */
-export class GrpcPipeClient<SendMap, ReceiveMap> extends EventEmitter {
+interface GrpcPipeClientEvents<SendMap, ReceiveMap> {
+  connected: (pipe: PipeHandler<SendMap, ReceiveMap>) => void;
+  disconnected: () => void;
+  error: (error: Error) => void;
+  [key: string]: (...args: any[]) => void;
+}
+
+export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcPipeClientEvents<SendMap, ReceiveMap>> {
   private client?: Client;
   private readonly reconnectDelayMs: number;
   private connected: boolean = false;
@@ -20,7 +25,6 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends EventEmitter {
   constructor(private options: GrpcPipeClientOptions) {
     super();
     this.reconnectDelayMs = options.reconnectDelayMs ?? 2000;
-
     this.connect();
   }
 

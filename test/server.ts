@@ -24,13 +24,7 @@ server.on('connection', (pipe) => {
 
   pipe.on('ping', (data) => {
     console.log(`[SERVER ${port}] Received ping:`, data);
-    // 🛠️ Important fix here
     pipe.post('pong', { message: data.message });
-  });
-
-  pipe.on('close', () => {
-    console.log(`[SERVER ${port}] Client disconnected.`);
-    clients.delete(pipe);
   });
 });
 

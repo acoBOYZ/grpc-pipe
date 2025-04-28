@@ -1,13 +1,15 @@
-import { GrpcPipeServer } from '../src/server/GrpcPipeServer';
+// for start PORT=50051 bun --watch server.ts
+import { GrpcPipeServer } from '../../src/server/GrpcPipeServer';
+import { UserProfile } from './data';
 
 /** Messages the server sends to the client */
 interface ServerSend {
-  pong: { message: string };
+  pong: { message: UserProfile };
 }
 
 /** Messages the server receives from the client */
 interface ServerReceive {
-  ping: { message: string };
+  ping: { message: UserProfile };
 }
 
 const port = parseInt(process.env.PORT || '50051', 10);
@@ -23,12 +25,7 @@ server.on('connection', (pipe) => {
 
   pipe.on('ping', (data) => {
     console.log(`[SERVER ${port}] Received ping:`, data);
-    pipe.post('pong', { message: data.message }); // 🚀 Just echo back the same ID
-  });
-
-  pipe.on('close', () => {
-    console.log(`[SERVER ${port}] Client disconnected.`);
-    clients.delete(pipe);
+    pipe.post('pong', { message: data.message }); // 🚀 Just echo back the same data
   });
 });
 

@@ -1,26 +1,25 @@
 // src/server/GrpcPipeServer.ts
-import { EventEmitter } from 'events';
 import { Server, ServerCredentials, type ServerDuplexStream } from '@grpc/grpc-js';
-import { GrpcServerTransport } from '../transports/GrpcServerTransport';
 import { PipeHandler } from '../core/PipeHandler';
 import { PipeMessage, PipeServiceService } from '../types/pipe';
+import { GrpcServerTransport } from '../transports/GrpcServerTransport';
+import { TypedEventEmitter } from '../core/TypedEventEmitter';
 
-/**
- * Options to create a GrpcPipeServer
- */
 export interface GrpcPipeServerOptions {
   port: number;
 }
 
-/**
- * GrpcPipeServer to accept client connections and create pipes
- */
-export class GrpcPipeServer<SendMap, ReceiveMap> extends EventEmitter {
+interface GrpcPipeServerEvents<SendMap, ReceiveMap> {
+  connection: (pipe: PipeHandler<SendMap, ReceiveMap>) => void;
+  error: (error: Error) => void;
+  [key: string]: (...args: any[]) => void;
+}
+
+export class GrpcPipeServer<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcPipeServerEvents<SendMap, ReceiveMap>> {
   private server: Server;
 
   constructor(private options: GrpcPipeServerOptions) {
     super();
-
     this.server = new Server();
 
     this.server.addService(PipeServiceService, {
@@ -31,7 +30,7 @@ export class GrpcPipeServer<SendMap, ReceiveMap> extends EventEmitter {
 
         stream.write({
           type: 'system_ready',
-          payload: Buffer.from(JSON.stringify({ status: 'ok' })),
+          payload: new Uint8Array(),
         });
       },
     });

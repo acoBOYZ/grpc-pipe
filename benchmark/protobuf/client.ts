@@ -1,18 +1,16 @@
-import { GrpcPipeClient } from '../src/client/GrpcPipeClient';
-import { PipeHandler } from '../src/core/PipeHandler';
+// for start bun --watch client.ts
+import type { InferSend, InferReceive } from '../../src';
+import { GrpcPipeClient } from '../../src/client/GrpcPipeClient';
+import { PipeHandler } from '../../src/core/PipeHandler';
+import { benchmarkClientRegistry } from './src/schema';
 
-interface ClientSend {
-  ping: { message: string };
-}
-
-interface ClientReceive {
-  pong: { message: string };
-}
+type ClientSend = InferSend<typeof benchmarkClientRegistry>;
+type ClientReceive = InferReceive<typeof benchmarkClientRegistry>;
 
 const serverAddresses = [
-  'localhost:50051',
-  'localhost:50052',
-  'localhost:50053',
+  'localhost:50061',
+  'localhost:50062',
+  'localhost:50063',
 ];
 
 const connections = new Map<string, PipeHandler<ClientSend, ClientReceive>>();
@@ -35,11 +33,13 @@ function connectToServer(address: string) {
   });
 
   client.on('connected', (pipe: PipeHandler<ClientSend, ClientReceive>) => {
+    pipe.useSchema(benchmarkClientRegistry);
+
     console.log(`[CLIENT] Connected to ${address}`);
     connections.set(address, pipe);
 
     pipe.on('pong', (data) => {
-      const id = data.message; // ✅ No splitting needed
+      const id = data.message?.id ?? ""; // <- need to read the real id (UserProfile has id field)
       const sentTime = pending.get(id);
       if (sentTime) {
         const elapsed = nowMs() - sentTime;
@@ -74,15 +74,15 @@ function startSending(address: string, pipe: PipeHandler<ClientSend, ClientRecei
       return;
     }
 
-    const id = `${address}-${sent}`; // Simple id
-    pending.set(id, nowMs());
-    pipe.post('ping', { message: id }); // ✅ No ':benchmark'
+    const fakeUserProfile = generateFakeUserProfile(`${address}-${sent}`);
+    pending.set(fakeUserProfile.id, nowMs());
+    pipe.post('ping', { message: fakeUserProfile });
     sent++;
   }, 0);
 }
 
 function printResults() {
-  console.log('\n[Benchmark Results]');
+  console.log('\n[Benchmark Results for PROTOBUF method]');
   if (latencies.length === 0) {
     console.log('No latencies measured.');
     return;
@@ -99,7 +99,39 @@ function printResults() {
   console.log(`Max latency: ${max} ms`);
 }
 
-// Connect to all servers
 for (const address of serverAddresses) {
   connectToServer(address);
+}
+
+// --- Helper: fake UserProfile generator
+import { UserProfile } from '../json/data';
+
+function generateFakeUserProfile(id: string): UserProfile {
+  return {
+    id,
+    username: `user_${id}`,
+    email: `user_${id}@test.com`,
+    bio: "This is a sample user profile.",
+    settings: {
+      theme: "dark",
+      notifications: {
+        email: true,
+        sms: false,
+        push: true,
+      },
+    },
+    stats: {
+      posts: 42,
+      followers: 1234,
+      following: 567,
+      createdAt: new Date().toISOString(),
+    },
+    posts: new Array(5).fill(null).map((_, idx) => ({
+      id: `${id}-post-${idx}`,
+      title: `Post #${idx}`,
+      content: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+      likes: Math.floor(Math.random() * 1000),
+      tags: ["test", "benchmark"],
+    })),
+  };
 }
