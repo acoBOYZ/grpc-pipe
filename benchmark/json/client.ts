@@ -2,7 +2,7 @@
 // client.ts
 import { GrpcPipeClient } from '../../src/client/GrpcPipeClient';
 import { PipeHandler } from '../../src/core/PipeHandler';
-import { UserProfile } from './data'; // We will define this next
+import { UserProfile } from './data';
 
 interface ClientSend {
   ping: { message: UserProfile };
@@ -103,7 +103,6 @@ function printResults() {
   console.log(`Max latency: ${max} ms`);
 }
 
-// Connect to all servers
 for (const address of serverAddresses) {
   connectToServer(address);
 }

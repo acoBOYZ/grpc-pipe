@@ -1,5 +1,3 @@
-// src/schema/SchemaRegistry.ts
-
 import type { MessageFns } from "../types";
 
 /**

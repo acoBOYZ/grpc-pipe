@@ -40,7 +40,7 @@ function connectToServer(address: string) {
     connections.set(address, pipe);
 
     pipe.on('pong', (data) => {
-      const id = data.message?.id ?? ""; // <- need to read the real id (UserProfile has id field)
+      const id = data.message?.id ?? "";
       const sentTime = pending.get(id);
       if (sentTime) {
         const elapsed = nowMs() - sentTime;

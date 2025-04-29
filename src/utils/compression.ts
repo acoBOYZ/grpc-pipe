@@ -1,4 +1,3 @@
-// src/utils/compression.ts
 import { gunzipSync, gzipSync } from 'zlib';
 
 export async function compress(data: Uint8Array): Promise<Uint8Array> {

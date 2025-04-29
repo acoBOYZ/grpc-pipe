@@ -1,4 +1,3 @@
-// src/core/TypedEventEmitter.ts
 import { EventEmitter } from 'events';
 
 /**

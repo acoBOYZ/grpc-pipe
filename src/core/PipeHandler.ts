@@ -1,4 +1,3 @@
-// src/core/PipeHandler.ts
 import type { Transport } from '../transports/Transport';
 import type { SchemaRegistry } from '../schema/SchemaRegistry';
 import os from 'os';
@@ -6,13 +5,25 @@ import { type queueAsPromised, promise as fastqPromise } from 'fastq';
 import { compress, decompress } from '../utils/compression';
 
 interface PipeHandlerOptions {
+  /** Enable compression for outgoing messages. */
   compression?: boolean;
+  /** Byte threshold for applying backpressure to outgoing messages. */
   backpressureThresholdBytes?: number;
 }
 
+/**
+ * PipeHandler provides a typed abstraction over a duplex `Transport`,
+ * managing schema-based encoding/decoding, optional compression, message queuing,
+ * and backpressure.
+ *
+ * @template SendMap - Message types the handler can send.
+ * @template ReceiveMap - Message types the handler can receive.
+ */
 export class PipeHandler<SendMap, ReceiveMap> {
   protected queue: queueAsPromised<{ type: keyof ReceiveMap; data: ReceiveMap[keyof ReceiveMap] }>;
-  protected callbacks: { [K in keyof ReceiveMap]?: ((data: ReceiveMap[K]) => void | Promise<void>)[] } = {};
+  protected callbacks: {
+    [K in keyof ReceiveMap]?: ((data: ReceiveMap[K]) => void | Promise<void>)[];
+  } = {};
 
   private ready: Promise<void>;
   private resolveReady!: () => void;
@@ -24,13 +35,20 @@ export class PipeHandler<SendMap, ReceiveMap> {
   private compressionEnabled: boolean;
   private backpressureThresholdBytes: number;
 
+  /**
+   * Creates a new PipeHandler instance.
+   *
+   * @param transport - The underlying transport to send and receive messages through.
+   * @param schema - Optional schema registry to encode/decode messages.
+   * @param options - Configuration options such as compression and backpressure settings.
+   */
   constructor(
     protected transport: Transport,
     private schema?: SchemaRegistry<SendMap, ReceiveMap>,
     options: PipeHandlerOptions = {},
   ) {
     this.compressionEnabled = options.compression ?? false;
-    this.backpressureThresholdBytes = options.backpressureThresholdBytes ?? 5 * 1024 * 1024; // 5MB default
+    this.backpressureThresholdBytes = options.backpressureThresholdBytes ?? 5 * 1024 * 1024;
 
     if (schema) {
       this.ready = new Promise((resolve) => {
@@ -56,6 +74,12 @@ export class PipeHandler<SendMap, ReceiveMap> {
     });
   }
 
+  /**
+   * Registers a schema registry for message encoding and decoding.
+   * Resolves any schema wait-pending operations.
+   *
+   * @param schema - A schema registry.
+   */
   public useSchema(schema: SchemaRegistry<SendMap, ReceiveMap>) {
     this.schema = schema;
     if (!this.readyResolved) {
@@ -64,6 +88,12 @@ export class PipeHandler<SendMap, ReceiveMap> {
     }
   }
 
+  /**
+   * Registers a callback for a specific message type.
+   *
+   * @param type - The message type to listen for.
+   * @param callback - The handler to invoke on receiving that message.
+   */
   public on<T extends keyof ReceiveMap>(type: T, callback: (data: ReceiveMap[T]) => void | Promise<void>) {
     if (!this.callbacks[type]) {
       this.callbacks[type] = [];
@@ -71,6 +101,12 @@ export class PipeHandler<SendMap, ReceiveMap> {
     this.callbacks[type]!.push(callback);
   }
 
+  /**
+   * Removes a previously registered callback for a given message type.
+   *
+   * @param type - The message type.
+   * @param callback - The specific callback to remove.
+   */
   public off<T extends keyof ReceiveMap>(type: T, callback: (data: ReceiveMap[T]) => void | Promise<void>) {
     const handlers = this.callbacks[type];
     if (handlers) {
@@ -79,6 +115,13 @@ export class PipeHandler<SendMap, ReceiveMap> {
     }
   }
 
+  /**
+   * Sends a message of a specified type and payload, with optional schema encoding and compression.
+   * If the transport's write buffer exceeds the backpressure threshold, the message is queued.
+   *
+   * @param type - Message type key.
+   * @param data - Data payload corresponding to the type.
+   */
   public async post<T extends keyof SendMap>(type: T, data: SendMap[T]) {
     await this.ready;
 
@@ -106,6 +149,12 @@ export class PipeHandler<SendMap, ReceiveMap> {
     }
   }
 
+  /**
+   * Routes an incoming message to the appropriate event handlers.
+   * Also manages post-send backpressure draining.
+   *
+   * @param message - The message object with `type` and raw `data`.
+   */
   protected async routeMessage(message: { type: keyof ReceiveMap; data: any }) {
     this.emit(message.type, message.data);
 
@@ -121,6 +170,12 @@ export class PipeHandler<SendMap, ReceiveMap> {
     }
   }
 
+  /**
+   * Emits a message to the registered callbacks after decoding and decompression.
+   *
+   * @param type - Message type key.
+   * @param payload - Raw binary payload.
+   */
   protected emit<T extends keyof ReceiveMap>(type: T, payload: any) {
     let data: ReceiveMap[T];
     let raw = payload;
@@ -129,14 +184,18 @@ export class PipeHandler<SendMap, ReceiveMap> {
       raw = decompress(payload);
     }
 
-    if (this.schema) {
-      data = this.schema.receive[type].decode(raw);
-    } else {
-      data = JSON.parse(raw.toString());
-    }
+    data = this.schema
+      ? this.schema.receive[type].decode(raw)
+      : JSON.parse(raw.toString());
+
     this.queue.push({ type, data });
   }
 
+  /**
+   * Executes registered handlers for a specific message.
+   *
+   * @param message - Contains message type and decoded data.
+   */
   private async process({ type, data }: { type: keyof ReceiveMap; data: ReceiveMap[keyof ReceiveMap] }) {
     const handlers = this.callbacks[type];
     if (handlers) {
@@ -146,6 +205,9 @@ export class PipeHandler<SendMap, ReceiveMap> {
     }
   }
 
+  /**
+   * Returns the current number of bytes buffered in the writable stream.
+   */
   private getPendingBytes(): number {
     const stream = (this.transport as any).stream;
     if (stream && typeof stream.writableLength === 'number') {
@@ -154,6 +216,12 @@ export class PipeHandler<SendMap, ReceiveMap> {
     return 0;
   }
 
+  /**
+   * Checks whether a given object is a valid message structure.
+   *
+   * @param message - The unknown object to validate.
+   * @returns `true` if the object has the required structure.
+   */
   private isValidMessage(message: unknown): message is { type: keyof ReceiveMap; data: any } {
     return (
       typeof message === 'object' &&
