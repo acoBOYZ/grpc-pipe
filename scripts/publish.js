@@ -8,9 +8,7 @@ import fs from 'node:fs'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
-/**
- * Manual config of packages to publish
- */
+/** Manual list of packages to publish */
 const packages = [
   { name: '@grpc-pipe/core', packageDir: 'packages/core' },
   { name: '@grpc-pipe/client', packageDir: 'packages/client' },
@@ -20,8 +18,9 @@ const packages = [
 const rootDir = resolve(__dirname, '..')
 const npmTag = process.env.TAG || 'latest'
 const branch = process.env.BRANCH || 'main'
+const tagName = `v${npmTag.replace(/^v/, '')}`
 
-console.log(`🔐 Using TAG=${npmTag}, BRANCH=${branch}`)
+console.log(`🔐 Using TAG=${tagName}, BRANCH=${branch}`)
 
 for (const pkg of packages) {
   const packagePath = resolve(rootDir, pkg.packageDir)
@@ -38,7 +37,7 @@ for (const pkg of packages) {
       stdio: 'inherit'
     })
 
-    console.log(`🚀 Publishing ${pkg.name}...`)
+    console.log(`🚀 Publishing ${pkg.name} to npm...`)
     execSync(`bun publish --tag ${npmTag} --access public --no-git-checks`, {
       cwd: packagePath,
       stdio: 'inherit'
@@ -49,5 +48,15 @@ for (const pkg of packages) {
   }
 }
 
-console.log('✅ All packages published successfully!')
+try {
+  console.log(`🏷️  Creating Git tag: ${tagName}`)
+  execSync(`git tag ${tagName}`, { cwd: rootDir, stdio: 'inherit' })
+  execSync(`git push origin ${tagName}`, { cwd: rootDir, stdio: 'inherit' })
+  console.log(`✅ Git tag ${tagName} pushed to origin`)
+} catch (err) {
+  console.error(`❌ Failed to tag or push:`, err.message)
+  process.exit(1)
+}
+
+console.log('✅ All packages published and Git tagged successfully!')
 process.exit(0)
