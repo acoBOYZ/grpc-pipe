@@ -43,9 +43,9 @@
     "src"
   ],
   "scripts": {
-    "clean": "rimraf ./dist",
-    "build": "bun build src/index.ts --outdir dist",
-    "prepare": "bun run build"
+    "clean": "rimraf ./dist && rimraf ./node_modules && rimraf ./coverage",
+    "build": "bun build ./src/index.ts --outdir dist --target node && bun run type:build && echo '[@grpc-pipe/server] build done ✅'",
+    "type:build": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@grpc-pipe/core": "workspace:*"
