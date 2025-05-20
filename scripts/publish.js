@@ -1,5 +1,6 @@
 // @ts-check
 
+import 'dotenv/config'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { publish } from '@tanstack/config/publish'
