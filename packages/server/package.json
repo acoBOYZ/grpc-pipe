@@ -1,6 +1,6 @@
 {
   "name": "@grpc-pipe/server",
-  "version": "0.1.51",
+  "version": "0.1.52",
   "author": "ACO .",
   "license": "MIT",
   "type": "module",
@@ -51,8 +51,8 @@
     "@grpc-pipe/core": "workspace:*"
   },
   "devDependencies": {
-    "@types/bun": "^1.2.9",
-    "@types/node": "^22.14.1",
+    "@types/bun": "^1.2.13",
+    "@types/node": "^22.15.20",
     "typescript": "^5.8.3"
   }
 }
