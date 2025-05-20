@@ -42,7 +42,11 @@
     "dist",
     "src"
   ],
-  "scripts": {},
+  "scripts": {
+    "clean": "rimraf ./dist",
+    "build": "bun build src/index.ts --outdir dist",
+    "prepare": "bun run build"
+  },
   "dependencies": {
     "@grpc-pipe/core": "workspace:*"
   },

@@ -42,7 +42,12 @@
     "dist",
     "src"
   ],
-  "scripts": {},
+  "scripts": {
+    "clean": "rimraf ./dist",
+    "generate:proto": "buf generate",
+    "build": "bun build src/index.ts --outdir dist",
+    "prepare": "bun run generate:proto && bun run build"
+  },
   "devDependencies": {
     "@bufbuild/protobuf": "^2.2.5",
     "@grpc/grpc-js": "^1.13.3",
