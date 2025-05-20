@@ -42,11 +42,7 @@
     "dist",
     "src"
   ],
-  "scripts": {
-    "clean": "rimraf ./dist && rimraf ./node_modules && rimraf ./coverage",
-    "build": "bun build ./src/index.ts --outdir dist --target node && bun run type:build && echo '[@grpc-pipe/client] build done ✅'",
-    "type:build": "tsc -p tsconfig.json"
-  },
+  "scripts": {},
   "dependencies": {
     "@grpc-pipe/core": "workspace:*"
   },

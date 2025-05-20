@@ -42,13 +42,7 @@
     "dist",
     "src"
   ],
-  "scripts": {
-    "clean": "rimraf ./dist && rimraf ./node_modules && rimraf ./coverage",
-    "build": "bun run proto:compile && bun build ./src/index.ts --outdir dist --target node && bun run type:build && echo '[@grpc-pipe/core] build done ✅'",
-    "type:build": "tsc -p tsconfig.json",
-    "proto:compile": "protoc --ts_proto_out=src/types --ts_proto_opt=outputServices=grpc-js --proto_path=proto proto/*.proto",
-    "dev": "bun run src/index.ts"
-  },
+  "scripts": {},
   "devDependencies": {
     "@bufbuild/protobuf": "^2.2.5",
     "@grpc/grpc-js": "^1.13.3",
