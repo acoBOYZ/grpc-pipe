@@ -4,6 +4,7 @@ import 'dotenv/config'
 import { execSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import fs from 'node:fs'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
@@ -19,12 +20,16 @@ const packages = [
 const rootDir = resolve(__dirname, '..')
 const npmTag = process.env.TAG || 'latest'
 const branch = process.env.BRANCH || 'main'
-const ghToken = process.env.GH_TOKEN || ''
 
 console.log(`🔐 Using TAG=${npmTag}, BRANCH=${branch}`)
 
 for (const pkg of packages) {
   const packagePath = resolve(rootDir, pkg.packageDir)
+
+  if (!fs.existsSync(packagePath)) {
+    console.warn(`⚠️  Skipping ${pkg.name} — directory not found.`)
+    continue
+  }
 
   try {
     console.log(`📦 Building ${pkg.name}...`)
@@ -34,7 +39,7 @@ for (const pkg of packages) {
     })
 
     console.log(`🚀 Publishing ${pkg.name}...`)
-    execSync(`pnpm publish --tag ${npmTag} --access=public --no-git-checks`, {
+    execSync(`bun publish --tag ${npmTag} --access public --no-git-checks`, {
       cwd: packagePath,
       stdio: 'inherit'
     })
