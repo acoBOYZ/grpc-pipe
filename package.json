@@ -1,65 +1,31 @@
 {
-  "name": "grpc-pipe",
-  "version": "0.1.2",
-  "description": "A type-safe GRPC Pipe System for Bun & Node.js",
-  "main": "lib/index.js",
-  "types": "types/index.d.ts",
-  "files": [
-    "lib/**/*",
-    "types/**/*",
-    "proto/**/*"
-  ],
-  "author": "ACO .",
-  "homepage": "https://github.com/acoBOYZ/grpc-pipe",
+  "name": "root",
+  "private": true,
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/acoBOYZ/grpc-pipe.git"
-  },
-  "bugs": {
-    "url": "https://github.com/acoBOYZ/grpc-pipe/issues"
-  },
-  "keywords": [
-    "grpc",
-    "grpc communication",
-    "grpc streaming",
-    "pipe messaging",
-    "typed communication",
-    "type-safe rpc",
-    "nodejs grpc",
-    "bun grpc",
-    "typescript grpc",
-    "fast messaging",
-    "binary protocol",
-    "real-time messaging",
-    "streaming rpc",
-    "full duplex grpc",
-    "custom transport protocol",
-    "schema-based messaging",
-    "protobuf transport",
-    "grpc bidirectional stream",
-    "typescript ipc",
-    "efficient rpc"
-  ],
-  "license": "GPL-3.0",
-  "engines": {
-    "node": ">=18",
-    "bun": ">=1.0.0"
+    "url": "https://github.com/acoBOYZ/grpc-pipe.git"
   },
   "scripts": {
-    "clean": "rm -rf ./types ./lib ./docs src/types/pipe",
-    "build": "bun run clean && tsc",
-    "proto:compile": "protoc --ts_proto_out=src/types --ts_proto_opt=outputServices=grpc-js --proto_path=proto proto/*.proto",
-    "doc": "typedoc --entryPoints src/index.ts --out docs",
-    "prepare": "bun run build"
+    "cleanNodeModules": "rimraf ./node_modules",
+    "clean": "bun --filter='./packages/**' run clean",
+    "build": "bun --filter='./packages/**' run build",
+    "build:all": "bun run build:core && bun run build:client && bun run build:server",
+    "build:core": "bun run --cwd packages/core build",
+    "build:client": "bun run --cwd packages/client build",
+    "build:server": "bun run --cwd packages/server build",
+    "publish:ci": "bun run scripts/publish.js"
   },
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "devDependencies": {
-    "@bufbuild/protobuf": "^2.2.5",
-    "@grpc/grpc-js": "^1.13.3",
-    "@grpc/proto-loader": "^0.7.15",
-    "@types/bun": "^1.2.11",
-    "@types/node": "^22.15.3",
-    "fastq": "^1.19.1",
-    "rxjs": "^7.8.2",
-    "typescript": "^5.8.3"
+    "@tanstack/config": "^0.18.0",
+    "@types/bun": "latest",
+    "@types/node": "^20.10.0",
+    "eslint": "^9.24.0",
+    "eslint-plugin-unused-imports": "^4.1.4",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.4.3"
   }
 }

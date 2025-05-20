@@ -1,5 +1,5 @@
-import type { InferReceive, InferSend } from '../../src';
-import { GrpcPipeServer } from '../../src/server/GrpcPipeServer';
+import type { InferReceive, InferSend } from '@grpc-pipe/server';
+import { GrpcPipeServer } from '@grpc-pipe/server';
 import { benchmarkServerRegistry } from './src/schema';
 
 type ServerSend = InferSend<typeof benchmarkServerRegistry>;

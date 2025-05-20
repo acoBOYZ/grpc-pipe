@@ -4,11 +4,30 @@ import os from 'os';
 import { type queueAsPromised, promise as fastqPromise } from 'fastq';
 import { compress, decompress } from '../utils/compression';
 
-interface PipeHandlerOptions {
-  /** Enable compression for outgoing messages. */
+export interface PipeHandlerOptions {
+  /**
+   * Enables compression for outgoing messages using gzip.
+   */
   compression?: boolean;
-  /** Byte threshold for applying backpressure to outgoing messages. */
+
+  /**
+   * Applies backpressure if the transport’s write buffer exceeds the given byte size.
+   * Default: `5MB`.
+   */
   backpressureThresholdBytes?: number;
+
+  /**
+   * Enables automatic heartbeat messages to ensure connection liveness.
+   * When set to `true`, uses default interval of 5000ms.
+   * When set as an object, you can customize the interval:
+   *
+   * ```ts
+   * heartbeat: { intervalMs: 10_000 }
+   * ```
+   *
+   * Set to `false` or omit to disable heartbeat entirely.
+   */
+  heartbeat?: boolean | { intervalMs?: number };
 }
 
 /**
@@ -19,7 +38,7 @@ interface PipeHandlerOptions {
  * @template SendMap - Message types the handler can send.
  * @template ReceiveMap - Message types the handler can receive.
  */
-export class PipeHandler<SendMap, ReceiveMap> {
+export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
   protected queue: queueAsPromised<{ type: keyof ReceiveMap; data: ReceiveMap[keyof ReceiveMap] }>;
   protected callbacks: {
     [K in keyof ReceiveMap]?: ((data: ReceiveMap[K]) => void | Promise<void>)[];
@@ -34,6 +53,7 @@ export class PipeHandler<SendMap, ReceiveMap> {
 
   private compressionEnabled: boolean;
   private backpressureThresholdBytes: number;
+  private heartbeatTimeout?: NodeJS.Timeout;
 
   /**
    * Creates a new PipeHandler instance.
@@ -46,7 +66,9 @@ export class PipeHandler<SendMap, ReceiveMap> {
     protected transport: Transport,
     private schema?: SchemaRegistry<SendMap, ReceiveMap>,
     options: PipeHandlerOptions = {},
+    public readonly context?: Context,
   ) {
+    this.context = context ?? ({} as Context);
     this.compressionEnabled = options.compression ?? false;
     this.backpressureThresholdBytes = options.backpressureThresholdBytes ?? 5 * 1024 * 1024;
 
@@ -57,7 +79,7 @@ export class PipeHandler<SendMap, ReceiveMap> {
     } else {
       this.readyResolved = true;
       this.ready = Promise.resolve();
-      this.resolveReady = () => {};
+      this.resolveReady = () => { };
     }
 
     this.queue = fastqPromise(this, this.process.bind(this), os.cpus().length);
@@ -72,6 +94,28 @@ export class PipeHandler<SendMap, ReceiveMap> {
         console.error('Invalid message received:', message);
       }
     });
+
+    if (options.heartbeat) {
+      const intervalMs =
+        typeof options.heartbeat === 'object'
+          ? options.heartbeat.intervalMs ?? 5000
+          : 5000;
+
+      this.heartbeatTimeout = setInterval(() => {
+        this.transport.send({
+          type: 'system_heartbeat',
+          data: new Uint8Array(),
+        });
+
+        if (this.onHeartbeat) {
+          this.onHeartbeat();
+        }
+
+        if (process.env.DEBUG?.includes('pipe:heartbeat')) {
+          console.log(`[PipeHandler] Sent heartbeat at ${new Date().toISOString()}`);
+        }
+      }, intervalMs);
+    }
   }
 
   /**
@@ -146,6 +190,14 @@ export class PipeHandler<SendMap, ReceiveMap> {
       });
     } else {
       await task();
+    }
+  }
+
+  public onHeartbeat?: () => void;
+
+  public destroyHeartBeat() {
+    if (this.heartbeatTimeout) {
+      clearInterval(this.heartbeatTimeout);
     }
   }
 

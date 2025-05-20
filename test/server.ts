@@ -1,35 +1,37 @@
 // --- server.ts ---
-import { GrpcPipeServer } from '../src/server/GrpcPipeServer';
+import { GrpcPipeServer } from '@grpc-pipe/server';
+import { benchmarkServerRegistry } from './src/schema';
+import type { InferReceive, InferSend } from '@grpc-pipe/server';
+import { generateBigPayload } from './src/payload';
 
-/** Messages the server sends to the client */
-interface ServerSend {
-  pong: { message: string };
-}
+type ServerSend = InferSend<typeof benchmarkServerRegistry>;
+type ServerReceive = InferReceive<typeof benchmarkServerRegistry>;
 
-/** Messages the server receives from the client */
-interface ServerReceive {
-  ping: { message: string };
-}
-
-const port = parseInt(process.env.PORT || '50051', 10);
-const server = new GrpcPipeServer<ServerSend, ServerReceive>({ port });
-
-// Track connected clients
-const clients = new Set<any>();
+const server = new GrpcPipeServer<ServerSend, ServerReceive>({
+  port: 50500,
+  compression: true,
+  serverOptions: {
+    'grpc.keepalive_time_ms': 10_000,
+    'grpc.keepalive_timeout_ms': 5_000,
+    'grpc.keepalive_permit_without_calls': 1,
+  }
+});
 
 server.on('connection', (pipe) => {
-  console.log(`[SERVER ${port}] New client connected.`);
+  pipe.useSchema(benchmarkServerRegistry);
 
-  clients.add(pipe);
+  const payload = generateBigPayload('initial-ping');
+  pipe.post('ping', { message: payload });
 
-  pipe.on('ping', (data) => {
-    console.log(`[SERVER ${port}] Received ping:`, data);
-    pipe.post('pong', { message: data.message });
+  pipe.on('pong', (data) => {
+    const id = data.message?.id ?? '';
+    console.log(`[SERVER] Received pong from ${id}`);
+    // No follow-up pings!
   });
 });
 
 server.on('error', (err) => {
-  console.error(`[SERVER ${port}] Error:`, err);
+  console.error('[SERVER] Error:', err);
 });
 
-console.log(`[SERVER ${port}] Ready.`);
+console.log('[SERVER] Ready on port 50500');

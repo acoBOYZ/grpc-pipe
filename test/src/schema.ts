@@ -6,19 +6,19 @@ import { Ping, Pong } from './benchmark';
 // Client schema
 export const benchmarkClientRegistry = createSchemaRegistry({
   send: {
-    ping: Ping,
+    pong: Pong,
   },
   receive: {
-    pong: Pong,
+    ping: Ping,
   },
 });
 
 // Server schema
 export const benchmarkServerRegistry = createSchemaRegistry({
   send: {
-    pong: Pong,
+    ping: Ping,
   },
   receive: {
-    ping: Ping,
+    pong: Pong,
   },
 });

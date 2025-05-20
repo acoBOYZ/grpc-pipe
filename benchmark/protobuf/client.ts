@@ -1,7 +1,6 @@
 // for start bun --watch client.ts
-import type { InferSend, InferReceive } from '../../src';
-import { GrpcPipeClient } from '../../src/client/GrpcPipeClient';
-import { PipeHandler } from '../../src/core/PipeHandler';
+import type { InferSend, InferReceive } from '@grpc-pipe/client';
+import { GrpcPipeClient, PipeHandler } from '@grpc-pipe/client';
 import { benchmarkClientRegistry } from './src/schema';
 
 type ClientSend = InferSend<typeof benchmarkClientRegistry>;
@@ -17,7 +16,7 @@ const connections = new Map<string, PipeHandler<ClientSend, ClientReceive>>();
 const pending = new Map<string, number>();
 const latencies: number[] = [];
 
-const messagesPerClient = 1000;
+const messagesPerClient = 10_000;
 const totalMessagesToSend = messagesPerClient * serverAddresses.length;
 
 let totalReceived = 0;

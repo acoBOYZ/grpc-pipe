@@ -1,24 +1,47 @@
-import { Client, credentials } from '@grpc/grpc-js';
-import { GrpcClientTransport } from '../transports/GrpcClientTransport';
-import { PipeHandler } from '../core/PipeHandler';
-import { PipeMessage } from '../types/pipe';
-import { TypedEventEmitter } from '../core/TypedEventEmitter';
+import {
+  Client,
+  type ClientOptions,
+  credentials,
+  Metadata
+} from '@grpc/grpc-js';
+import type { PipeHandlerOptions } from '@grpc-pipe/core';
+import {
+  GrpcClientTransport,
+  PipeHandler,
+  PipeMessage,
+  TypedEventEmitter,
+} from '@grpc-pipe/core';
 
 /**
  * Configuration options for {@link GrpcPipeClient}.
  */
-export interface GrpcPipeClientOptions {
+export interface GrpcPipeClientOptions extends PipeHandlerOptions {
   /** The server address to connect to (e.g. `localhost:50051`). */
   address: string;
 
   /** Delay in milliseconds before attempting reconnection after disconnection. Defaults to 2000ms. */
   reconnectDelayMs?: number;
 
-  /** Whether to enable compression for outgoing messages. */
-  compression?: boolean;
+  /**
+   * Optional metadata to send during the initial connection.
+   * Example:
+   * `{ authorization: 'Bearer abc', clientId: '123' }`
+   */
+  metadata?: Record<string, string>;
 
-  /** Threshold in bytes for applying backpressure to outgoing messages. Defaults to 5MB. */
-  backpressureThresholdBytes?: number;
+  /**
+   * Enable TLS. If true, uses default secure credentials.
+   * Optional advanced: pass root cert if needed.
+   */
+  tls?: boolean | {
+    rootCerts?: Buffer | string;
+  };
+
+  /**
+   * Advanced: gRPC channel options (e.g. keepalive settings).
+   * See: https://grpc.github.io/grpc/core/group__grpc__arg__keys.html
+   */
+  channelOptions?: ClientOptions;
 }
 
 /**
@@ -63,6 +86,7 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
   private readonly reconnectDelayMs: number;
   private readonly compression: boolean;
   private readonly backpressureThresholdBytes: number;
+  private readonly heartbeat: boolean | { intervalMs?: number };
   private connected: boolean = false;
 
   /**
@@ -75,6 +99,7 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
     this.reconnectDelayMs = options.reconnectDelayMs ?? 2000;
     this.compression = options.compression ?? false;
     this.backpressureThresholdBytes = options.backpressureThresholdBytes ?? 5 * 1024 * 1024;
+    this.heartbeat = options.heartbeat ?? false;
     this.connect();
   }
 
@@ -85,18 +110,36 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
    * Automatically reconnects on `end`, `close`, or `error`.
    */
   private connect() {
-    this.client = new Client(this.options.address, credentials.createInsecure());
+    if (typeof this.options.address !== 'string') {
+      throw new TypeError(`Invalid gRPC server address: ${this.options.address}`);
+    }
+
+    const creds = this.options.tls
+      ? credentials.createSsl(
+        typeof this.options.tls === 'object' && this.options.tls.rootCerts
+          ? Buffer.from(this.options.tls.rootCerts)
+          : undefined
+      )
+      : credentials.createInsecure();
+    this.client = new Client(this.options.address, creds, this.options.channelOptions);
+
+    const metadata = new Metadata();
+    for (const [key, value] of Object.entries(this.options.metadata ?? {})) {
+      metadata.set(key, value);
+    }
 
     const stream = this.client.makeBidiStreamRequest(
       '/pipe.PipeService/Communicate',
       (message: PipeMessage) => Buffer.from(PipeMessage.encode(message).finish()),
-      (buffer: Buffer) => PipeMessage.decode(buffer)
+      (buffer: Buffer) => PipeMessage.decode(buffer),
+      metadata
     );
 
     const transport = new GrpcClientTransport(stream);
     const pipe = new PipeHandler<SendMap, ReceiveMap>(transport, undefined, {
       compression: this.compression,
       backpressureThresholdBytes: this.backpressureThresholdBytes,
+      heartbeat: this.heartbeat,
     });
 
     stream.on('metadata', () => {

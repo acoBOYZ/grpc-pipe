@@ -1,5 +1,5 @@
 // for start PORT=50051 bun --watch server.ts
-import { GrpcPipeServer } from '../../src/server/GrpcPipeServer';
+import { GrpcPipeServer } from '@grpc-pipe/server';
 import { UserProfile } from './data';
 
 /** Messages the server sends to the client */

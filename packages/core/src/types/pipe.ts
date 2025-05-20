@@ -20,9 +20,17 @@ import {
 
 export const protobufPackage = "pipe";
 
-/** The PipeMessage structure for sending typed data. */
+/**
+ * PipeMessage represents a generic message used in the Pipe communication system.
+ *
+ * Each message has:
+ * - `type`: a string identifier to distinguish the kind of message.
+ * - `payload`: a binary payload (usually encoded data).
+ */
 export interface PipeMessage {
+  /** Identifier for the message type (e.g., "chat_message", "heartbeat"). */
   type: string;
+  /** Serialized binary data corresponding to the message. */
   payload: Uint8Array;
 }
 
@@ -102,7 +110,13 @@ export const PipeMessage: MessageFns<PipeMessage> = {
   },
 };
 
-/** The PipeService using bidirectional streaming. */
+/**
+ * PipeService provides a bidirectional streaming RPC method named `Communicate`.
+ *
+ * This enables both client and server to send and receive `PipeMessage` streams
+ * in real-time, making it suitable for custom protocol implementations, messaging,
+ * or RPC-over-stream scenarios.
+ */
 export type PipeServiceService = typeof PipeServiceService;
 export const PipeServiceService = {
   communicate: {

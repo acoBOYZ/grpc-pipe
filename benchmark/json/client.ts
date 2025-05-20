@@ -1,7 +1,6 @@
 // for start bun --watch client.ts
 // client.ts
-import { GrpcPipeClient } from '../../src/client/GrpcPipeClient';
-import { PipeHandler } from '../../src/core/PipeHandler';
+import { GrpcPipeClient, PipeHandler } from '@grpc-pipe/client';
 import { UserProfile } from './data';
 
 interface ClientSend {
