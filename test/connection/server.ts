@@ -1,8 +1,8 @@
 // --- server.ts ---
 import { GrpcPipeServer } from '@grpc-pipe/server';
-import { benchmarkServerRegistry } from './src/schema';
+import { benchmarkServerRegistry } from '../src/schema';
 import type { InferReceive, InferSend } from '@grpc-pipe/server';
-import { generateBigPayload } from './src/payload';
+import { generateBigPayload } from '../src/payload';
 
 type ServerSend = InferSend<typeof benchmarkServerRegistry>;
 type ServerReceive = InferReceive<typeof benchmarkServerRegistry>;

@@ -4,39 +4,45 @@ import os from 'os';
 import { type queueAsPromised, promise as fastqPromise } from 'fastq';
 import { compress, decompress } from '../utils/compression';
 
+/**
+ * Configuration options for {@link PipeHandler}.
+ */
 export interface PipeHandlerOptions {
   /**
    * Enables compression for outgoing messages using gzip.
+   * If set to `true`, messages will be compressed before sending.
    */
   compression?: boolean;
 
   /**
-   * Applies backpressure if the transport’s write buffer exceeds the given byte size.
-   * Default: `5MB`.
+   * Applies backpressure if the transport's write buffer exceeds the given byte size.
+   * Prevents memory overflow by queuing messages when the limit is reached.
+   * 
+   * @default 5 * 1024 * 1024 (5MB)
    */
   backpressureThresholdBytes?: number;
 
   /**
    * Enables automatic heartbeat messages to ensure connection liveness.
-   * When set to `true`, uses default interval of 5000ms.
-   * When set as an object, you can customize the interval:
    *
-   * ```ts
-   * heartbeat: { intervalMs: 10_000 }
-   * ```
+   * - If set to `true`, uses the default interval of 5000ms.
+   * - If set to an object, you can customize the interval using `intervalMs`.
+   * - If set to `false` or omitted, heartbeats are disabled.
    *
-   * Set to `false` or omit to disable heartbeat entirely.
+   * @example
+   * heartbeat: { intervalMs: 10000 }
    */
   heartbeat?: boolean | { intervalMs?: number };
 }
 
 /**
- * PipeHandler provides a typed abstraction over a duplex `Transport`,
- * managing schema-based encoding/decoding, optional compression, message queuing,
- * and backpressure.
+ * PipeHandler provides a typed abstraction over a duplex {@link Transport},
+ * handling schema-based message encoding/decoding, optional gzip compression,
+ * asynchronous backpressure-aware posting, and message event dispatching.
  *
- * @template SendMap - Message types the handler can send.
- * @template ReceiveMap - Message types the handler can receive.
+ * @template SendMap - The shape of messages that can be sent by this handler.
+ * @template ReceiveMap - The shape of messages that can be received.
+ * @template Context - Optional session context tied to this handler instance.
  */
 export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
   protected queue: queueAsPromised<{ type: keyof ReceiveMap; data: ReceiveMap[keyof ReceiveMap] }>;
@@ -56,11 +62,12 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
   private heartbeatTimeout?: NodeJS.Timeout;
 
   /**
-   * Creates a new PipeHandler instance.
+   * Creates a new instance of {@link PipeHandler}.
    *
-   * @param transport - The underlying transport to send and receive messages through.
-   * @param schema - Optional schema registry to encode/decode messages.
-   * @param options - Configuration options such as compression and backpressure settings.
+   * @param transport - The duplex transport layer used for sending and receiving messages.
+   * @param schema - Optional schema registry for protobuf-based message serialization.
+   * @param options - Configuration options for compression, heartbeat, and backpressure.
+   * @param context - Optional custom context that will be attached to the instance.
    */
   constructor(
     protected transport: Transport,
@@ -119,10 +126,10 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
   }
 
   /**
-   * Registers a schema registry for message encoding and decoding.
-   * Resolves any schema wait-pending operations.
+   * Registers a schema registry after construction.
+   * Useful when schema setup is asynchronous or deferred.
    *
-   * @param schema - A schema registry.
+   * @param schema - A {@link SchemaRegistry} containing encoders/decoders for all message types.
    */
   public useSchema(schema: SchemaRegistry<SendMap, ReceiveMap>) {
     this.schema = schema;
@@ -133,10 +140,11 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
   }
 
   /**
-   * Registers a callback for a specific message type.
+   * Subscribes to messages of a specific type.
+   * Multiple callbacks may be registered for a given type.
    *
-   * @param type - The message type to listen for.
-   * @param callback - The handler to invoke on receiving that message.
+   * @param type - The message type key to listen for.
+   * @param callback - Function to handle the decoded message data.
    */
   public on<T extends keyof ReceiveMap>(type: T, callback: (data: ReceiveMap[T]) => void | Promise<void>) {
     if (!this.callbacks[type]) {
@@ -146,10 +154,10 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
   }
 
   /**
-   * Removes a previously registered callback for a given message type.
+   * Unsubscribes a specific callback from a message type.
    *
    * @param type - The message type.
-   * @param callback - The specific callback to remove.
+   * @param callback - The handler function to remove.
    */
   public off<T extends keyof ReceiveMap>(type: T, callback: (data: ReceiveMap[T]) => void | Promise<void>) {
     const handlers = this.callbacks[type];
@@ -160,11 +168,14 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
   }
 
   /**
-   * Sends a message of a specified type and payload, with optional schema encoding and compression.
-   * If the transport's write buffer exceeds the backpressure threshold, the message is queued.
+   * Sends a message of the given type with the provided payload.
    *
-   * @param type - Message type key.
-   * @param data - Data payload corresponding to the type.
+   * - Applies compression if enabled.
+   * - Uses schema encoding if available.
+   * - Applies backpressure when write buffer exceeds threshold.
+   *
+   * @param type - The message type key.
+   * @param data - The payload to send for the message type.
    */
   public async post<T extends keyof SendMap>(type: T, data: SendMap[T]) {
     await this.ready;
@@ -193,8 +204,16 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
     }
   }
 
+  /**
+   * Optional hook invoked every time a heartbeat is sent.
+   * Can be used to log or trigger custom behavior.
+   */
   public onHeartbeat?: () => void;
 
+  /**
+   * Stops the automatic heartbeat mechanism (if active).
+   * Use this when tearing down a connection intentionally.
+   */
   public destroyHeartBeat() {
     if (this.heartbeatTimeout) {
       clearInterval(this.heartbeatTimeout);
@@ -202,10 +221,10 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
   }
 
   /**
-   * Routes an incoming message to the appropriate event handlers.
-   * Also manages post-send backpressure draining.
+   * Routes an incoming raw message to the correct handler(s).
+   * Also drains the post-send backpressure queue if needed.
    *
-   * @param message - The message object with `type` and raw `data`.
+   * @param message - An object containing a `type` and raw `data`.
    */
   protected async routeMessage(message: { type: keyof ReceiveMap; data: any }) {
     this.emit(message.type, message.data);
@@ -223,10 +242,10 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
   }
 
   /**
-   * Emits a message to the registered callbacks after decoding and decompression.
+   * Decodes, decompresses (if enabled), and dispatches a message to registered listeners.
    *
-   * @param type - Message type key.
-   * @param payload - Raw binary payload.
+   * @param type - The message type.
+   * @param payload - Raw binary data received from transport.
    */
   protected emit<T extends keyof ReceiveMap>(type: T, payload: any) {
     let data: ReceiveMap[T];
@@ -244,9 +263,9 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
   }
 
   /**
-   * Executes registered handlers for a specific message.
+   * Internal fastq task that executes all handlers for a given message.
    *
-   * @param message - Contains message type and decoded data.
+   * @param message - The fully decoded message with type and data.
    */
   private async process({ type, data }: { type: keyof ReceiveMap; data: ReceiveMap[keyof ReceiveMap] }) {
     const handlers = this.callbacks[type];
@@ -258,7 +277,8 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
   }
 
   /**
-   * Returns the current number of bytes buffered in the writable stream.
+   * Returns the number of bytes buffered for writing on the underlying stream.
+   * Used for applying backpressure when needed.
    */
   private getPendingBytes(): number {
     const stream = (this.transport as any).stream;
@@ -269,10 +289,11 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
   }
 
   /**
-   * Checks whether a given object is a valid message structure.
+   * Validates the structure of an incoming message object.
+   * Ensures it contains both `type` and `data` keys.
    *
    * @param message - The unknown object to validate.
-   * @returns `true` if the object has the required structure.
+   * @returns `true` if the message is structurally valid.
    */
   private isValidMessage(message: unknown): message is { type: keyof ReceiveMap; data: any } {
     return (

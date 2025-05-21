@@ -16,7 +16,7 @@ const packages = [
 ]
 
 const rootDir = resolve(__dirname, '..')
-const versionTag = process.env.TAG || '0.1.4'
+const versionTag = process.env.TAG || '0.1.0'
 const npmTag = 'latest' // Always point latest to this version
 const branch = process.env.BRANCH || 'main'
 const tagName = `v${versionTag.replace(/^v/, '')}`

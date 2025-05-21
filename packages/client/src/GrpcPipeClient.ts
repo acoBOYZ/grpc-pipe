@@ -1,5 +1,6 @@
 import {
   Client,
+  type ClientDuplexStream,
   type ClientOptions,
   credentials,
   Metadata
@@ -72,14 +73,14 @@ interface GrpcPipeClientEvents<SendMap, ReceiveMap> {
 
 /**
  * GrpcPipeClient establishes and maintains a bidirectional streaming connection
- * to a gRPC server, with automatic reconnection, message compression,
- * and backpressure support.
+ * to a gRPC server using the {@link PipeHandler} abstraction.
  *
- * It emits typed events for connection lifecycle events and wraps the stream
- * in a {@link PipeHandler} for typed messaging.
+ * It provides automatic reconnection, optional compression, schema-based message handling,
+ * and backpressure support. This client is intended for use in real-time systems
+ * such as chat apps, telemetry, or RPC-over-stream implementations.
  *
- * @template SendMap - The message map for outbound messages.
- * @template ReceiveMap - The message map for inbound messages.
+ * @template SendMap - A map of message types the client can send.
+ * @template ReceiveMap - A map of message types the client can receive.
  */
 export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcPipeClientEvents<SendMap, ReceiveMap>> {
   private client?: Client;
@@ -90,9 +91,23 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
   private connected: boolean = false;
 
   /**
+   * Exposes the raw gRPC duplex stream used for communication.
+   * Intended primarily for testing or low-level access.
+   */
+  public stream?: ClientDuplexStream<PipeMessage, PipeMessage>;
+
+  /**
    * Creates a new instance of {@link GrpcPipeClient}.
    *
-   * @param options - Client configuration including address and optional behaviors.
+   * @param options - Client configuration options.
+   * @param options.address - Target server address (e.g., `localhost:50051`).
+   * @param options.reconnectDelayMs - Optional delay between reconnection attempts (default: 2000ms).
+   * @param options.metadata - Optional metadata to include in the initial connection.
+   * @param options.tls - Enable TLS, optionally with a root cert.
+   * @param options.channelOptions - gRPC channel options for advanced tuning.
+   * @param options.compression - Enable gzip compression for outgoing messages.
+   * @param options.backpressureThresholdBytes - Apply backpressure when transport buffer exceeds this size.
+   * @param options.heartbeat - Enables automatic heartbeats (interval or boolean).
    */
   constructor(private options: GrpcPipeClientOptions) {
     super();
@@ -104,10 +119,13 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
   }
 
   /**
-   * Internal method to initiate the connection and setup event handlers
-   * for the gRPC bidirectional stream.
+   * Establishes a gRPC bidirectional stream with the server.
+   * This method is invoked automatically on instantiation and reconnects automatically on disconnect.
    *
-   * Automatically reconnects on `end`, `close`, or `error`.
+   * Emits:
+   * - `'connected'` when the stream is successfully established.
+   * - `'disconnected'` when the stream ends or closes.
+   * - `'error'` when a stream or network error occurs.
    */
   private connect() {
     if (typeof this.options.address !== 'string') {
@@ -121,6 +139,7 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
           : undefined
       )
       : credentials.createInsecure();
+
     this.client = new Client(this.options.address, creds, this.options.channelOptions);
 
     const metadata = new Metadata();
@@ -128,21 +147,21 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
       metadata.set(key, value);
     }
 
-    const stream = this.client.makeBidiStreamRequest(
+    this.stream = this.client.makeBidiStreamRequest(
       '/pipe.PipeService/Communicate',
       (message: PipeMessage) => Buffer.from(PipeMessage.encode(message).finish()),
       (buffer: Buffer) => PipeMessage.decode(buffer),
       metadata
     );
 
-    const transport = new GrpcClientTransport(stream);
+    const transport = new GrpcClientTransport(this.stream);
     const pipe = new PipeHandler<SendMap, ReceiveMap>(transport, undefined, {
       compression: this.compression,
       backpressureThresholdBytes: this.backpressureThresholdBytes,
       heartbeat: this.heartbeat,
     });
 
-    stream.on('metadata', () => {
+    this.stream.on('metadata', () => {
       if (!this.connected) {
         this.connected = true;
         this.emit('connected', pipe);
@@ -150,25 +169,48 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
       }
     });
 
-    stream.on('error', (err) => {
+    this.stream.on('error', (err) => {
       this.connected = false;
       this.emit('error', err);
       console.error('[GrpcPipeClient] Stream error:', err.message);
       setTimeout(() => this.connect(), this.reconnectDelayMs);
     });
 
-    stream.on('end', () => {
+    this.stream.on('end', () => {
       this.connected = false;
       this.emit('disconnected');
       console.warn('[GrpcPipeClient] Disconnected from server.');
       setTimeout(() => this.connect(), this.reconnectDelayMs);
     });
 
-    stream.on('close', () => {
+    this.stream.on('close', () => {
       this.connected = false;
       this.emit('disconnected');
       console.warn('[GrpcPipeClient] Stream closed.');
       setTimeout(() => this.connect(), this.reconnectDelayMs);
     });
+  }
+
+  /**
+   * Gracefully closes the active connection to the server.
+   *
+   * This method:
+   * - Ends the gRPC stream, notifying the server to trigger `'disconnected'`.
+   * - Closes the underlying gRPC client/channel.
+   *
+   * It is recommended to call this method when the client is shutting down,
+   * logging out, or no longer needs to maintain a persistent connection.
+   *
+   * ```ts
+   * client.close(); // Triggers server disconnect event
+   * ```
+   */
+  public close() {
+    try {
+      this.stream?.end();
+      this.client?.close();
+    } catch (err) {
+      console.error('[GrpcPipeClient] Error during close:', err);
+    }
   }
 }

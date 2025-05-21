@@ -30,6 +30,12 @@ export interface GrpcPipeServerOptions<Context = any> extends PipeHandlerOptions
   onConnect?: PipeConnectionHook<Context>;
 
   /**
+   * Called after the pipe is created, but before "system_ready" is sent.
+   * You can store references, set schema, attach listeners, etc.
+   */
+  onPipeReady?: (pipe: PipeHandler<any, any>) => void | Promise<void>;
+
+  /**
    * Enable TLS by passing key/cert pair.
    * If not provided, insecure connection will be used.
    */
@@ -58,6 +64,12 @@ interface GrpcPipeServerEvents<SendMap, ReceiveMap> {
   connection: (pipe: PipeHandler<SendMap, ReceiveMap>) => void;
 
   /**
+   * Emitted when an individual client disconnects.
+   * Safe to use for session cleanup.
+   */
+  disconnected: (pipe: PipeHandler<SendMap, ReceiveMap>) => void;
+
+  /**
    * Emitted when a server error occurs.
    * @param error - The encountered error.
    */
@@ -68,12 +80,15 @@ interface GrpcPipeServerEvents<SendMap, ReceiveMap> {
 }
 
 /**
- * GrpcPipeServer is a gRPC-based transport server that emits events
- * when clients connect or errors occur. It wraps low-level gRPC functionality
- * and provides high-level typed streaming communication using {@link PipeHandler}.
+ * GrpcPipeServer is a high-level wrapper around a gRPC server that facilitates
+ * real-time, bidirectional communication using the {@link PipeHandler} abstraction.
  *
- * @template SendMap - The map of message types that the server can send.
- * @template ReceiveMap - The map of message types that the server can receive.
+ * It emits structured events when clients connect or disconnect, provides hooks for
+ * authentication (`onConnect`) and initialization (`onPipeReady`), and supports
+ * advanced transport features like compression, heartbeats, and backpressure.
+ *
+ * @template SendMap - The message types the server can send to clients.
+ * @template ReceiveMap - The message types the server can receive from clients.
  */
 export class GrpcPipeServer<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcPipeServerEvents<SendMap, ReceiveMap>> {
   private server: Server;
@@ -82,9 +97,17 @@ export class GrpcPipeServer<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
   private readonly heartbeat: boolean | { intervalMs?: number };
 
   /**
-   * Creates a new instance of {@link GrpcPipeServer}.
+   * Constructs a new {@link GrpcPipeServer}.
    *
-   * @param options - Configuration options such as port and compression settings.
+   * @param options - Configuration for the server's behavior and transport.
+   * @param options.port - The TCP port to listen on (e.g., `50500`).
+   * @param options.onConnect - Optional hook to authenticate clients and return session context.
+   * @param options.onPipeReady - Optional hook fired after `PipeHandler` is created but before `'connection'` is emitted.
+   * @param options.tls - TLS credentials for secure connections. If omitted, server uses insecure transport.
+   * @param options.serverOptions - Additional gRPC server/channel options (e.g., keepalive settings).
+   * @param options.compression - Enables gzip compression for messages.
+   * @param options.backpressureThresholdBytes - Buffer size before applying write backpressure.
+   * @param options.heartbeat - Enable heartbeat pings (boolean or interval object).
    */
   constructor(private options: GrpcPipeServerOptions<{}>) {
     super();
@@ -100,8 +123,8 @@ export class GrpcPipeServer<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
         const metadata = stream.metadata;
 
         let context: any = {};
-        try {
-          if (this.options.onConnect) {
+        if (this.options.onConnect) {
+          try {
             const maybeCtx = await this.options.onConnect({
               metadata,
               transport,
@@ -111,10 +134,10 @@ export class GrpcPipeServer<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
             if (maybeCtx && typeof maybeCtx === 'object') {
               context = maybeCtx;
             }
+          } catch (err) {
+            stream.destroy(err instanceof Error ? err : new Error('Auth failed'));
+            return;
           }
-        } catch (err) {
-          stream.destroy(err instanceof Error ? err : new Error('Auth failed'));
-          return;
         }
 
         const pipe = new PipeHandler<SendMap, ReceiveMap>(transport, undefined, {
@@ -123,7 +146,23 @@ export class GrpcPipeServer<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
           heartbeat: this.heartbeat,
         }, context);
 
+        if (this.options.onPipeReady) {
+          try {
+            await this.options.onPipeReady(pipe);
+          } catch (err) {
+            stream.destroy(err instanceof Error ? err : new Error('onPipeReady failed'));
+            return;
+          }
+        }
+
         this.emit('connection', pipe);
+
+        const handleDisconnect = () => {
+          this.emit('disconnected', pipe);
+        };
+
+        stream.on('close', handleDisconnect);
+        stream.on('end', handleDisconnect);
 
         stream.write({
           type: 'system_ready',
@@ -136,16 +175,15 @@ export class GrpcPipeServer<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
   }
 
   /**
-   * Binds the server to the specified port and starts listening.
-   * Emits an 'error' event if binding fails.
+   * Binds the gRPC server to the configured port and starts listening for incoming connections.
+   * Automatically selects between secure (TLS) and insecure modes based on provided credentials.
    *
-   * This method is called automatically during construction.
-   * It uses insecure credentials by default.
+   * Emits `'error'` if binding fails.
    */
   private bind() {
     const creds = this.options.tls
       ? ServerCredentials.createSsl(
-        null, //NOTE: root certs (optional for mTLS)
+        null,
         [{
           cert_chain: Buffer.isBuffer(this.options.tls.cert)
             ? this.options.tls.cert
