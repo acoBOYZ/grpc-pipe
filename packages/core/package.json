@@ -1,6 +1,6 @@
 {
   "name": "@grpc-pipe/core",
-  "version": "0.1.53",
+  "version": "0.1.55",
   "author": "ACO .",
   "license": "MIT",
   "type": "module",
@@ -43,19 +43,9 @@
     "src"
   ],
   "scripts": {
-    "clean": "rimraf ./dist && rimraf ./node_modules && rimraf ./coverage",
-    "build": "bun run proto:compile && bun build ./src/index.ts --outdir dist --target node && bun run type:build && echo '[@grpc-pipe/core] build done ✅'",
-    "type:build": "tsc -p tsconfig.json",
+    "clean": "rimraf ./dist && rimraf ./node_modules",
+    "build": "bun run proto:compile && tsc -p tsconfig.json && echo '[@grpc-pipe/core] build done ✅'",
     "proto:compile": "protoc --ts_proto_out=src/types --ts_proto_opt=outputServices=grpc-js --proto_path=proto proto/*.proto"
   },
-  "devDependencies": {
-    "@bufbuild/protobuf": "^2.4.0",
-    "@grpc/grpc-js": "^1.13.3",
-    "@grpc/proto-loader": "^0.7.15",
-    "@types/bun": "^1.2.13",
-    "@types/node": "^22.15.20",
-    "fastq": "^1.19.1",
-    "rxjs": "^7.8.2",
-    "typescript": "^5.8.3"
-  }
+  "devDependencies": {}
 }

@@ -66,9 +66,6 @@ interface GrpcPipeClientEvents<SendMap, ReceiveMap> {
    * @param error - The encountered error.
    */
   error: (error: Error) => void;
-
-  /** Additional custom events. */
-  [key: string]: (...args: any[]) => void;
 }
 
 /**
@@ -88,7 +85,9 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
   private readonly compression: boolean;
   private readonly backpressureThresholdBytes: number;
   private readonly heartbeat: boolean | { intervalMs?: number };
+  private isReconnecting: boolean = false;
   private connected: boolean = false;
+
 
   /**
    * Exposes the raw gRPC duplex stream used for communication.
@@ -132,6 +131,9 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
       throw new TypeError(`Invalid gRPC server address: ${this.options.address}`);
     }
 
+    if (this.isReconnecting) return;
+    this.isReconnecting = true;
+
     const creds = this.options.tls
       ? credentials.createSsl(
         typeof this.options.tls === 'object' && this.options.tls.rootCerts
@@ -169,25 +171,29 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
       }
     });
 
-    this.stream.on('error', (err) => {
+    const connectFn = () => {
+      pipe.destroy();
       this.connected = false;
+      this.isReconnecting = false;
+      setTimeout(() => this.connect(), this.reconnectDelayMs);
+    }
+
+    this.stream.on('error', (err) => {
       this.emit('error', err);
       console.error('[GrpcPipeClient] Stream error:', err.message);
-      setTimeout(() => this.connect(), this.reconnectDelayMs);
+      connectFn();
     });
 
     this.stream.on('end', () => {
-      this.connected = false;
       this.emit('disconnected');
       console.warn('[GrpcPipeClient] Disconnected from server.');
-      setTimeout(() => this.connect(), this.reconnectDelayMs);
+      connectFn();
     });
 
     this.stream.on('close', () => {
-      this.connected = false;
       this.emit('disconnected');
       console.warn('[GrpcPipeClient] Stream closed.');
-      setTimeout(() => this.connect(), this.reconnectDelayMs);
+      connectFn();
     });
   }
 
@@ -212,5 +218,33 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
     } catch (err) {
       console.error('[GrpcPipeClient] Error during close:', err);
     }
+  }
+
+  /**
+   * Gracefully shuts down the client and cleans up all internal state.
+   * - Stops reconnection attempts
+   * - Destroys the active stream and transport
+   * - Removes all listeners
+   */
+  public destroy() {
+    this.isReconnecting = true;
+
+    try {
+      this.stream?.removeAllListeners();
+      this.stream?.end();
+    } catch (err) {
+      console.warn('[GrpcPipeClient] Error ending stream during destroy:', err);
+    }
+
+    try {
+      this.client?.close();
+    } catch (err) {
+      console.warn('[GrpcPipeClient] Error closing client during destroy:', err);
+    }
+
+    this.removeAllListeners();
+    this.stream = undefined;
+    this.client = undefined;
+    this.connected = false;
   }
 }

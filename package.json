@@ -1,10 +1,10 @@
 {
   "name": "root",
-  "private": true,
   "repository": {
     "type": "git",
     "url": "https://github.com/acoBOYZ/grpc-pipe.git"
   },
+  "private": true,
   "scripts": {
     "cleanNodeModules": "rimraf ./node_modules",
     "clean": "bun --filter='./packages/**' run clean",
@@ -20,9 +20,14 @@
     "packages/*"
   ],
   "devDependencies": {
+    "@bufbuild/protobuf": "^2.4.0",
+    "@grpc/grpc-js": "^1.13.3",
+    "@grpc/proto-loader": "^0.7.15",
     "@types/bun": "latest",
-    "@types/node": "^22.15.20",
+    "@types/node": "^22.15.21",
+    "fastq": "^1.19.1",
     "rimraf": "^6.0.1",
+    "rxjs": "^7.8.2",
     "typescript": "^5.8.3"
   }
 }

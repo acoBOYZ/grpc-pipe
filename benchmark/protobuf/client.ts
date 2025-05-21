@@ -16,7 +16,7 @@ const connections = new Map<string, PipeHandler<ClientSend, ClientReceive>>();
 const pending = new Map<string, number>();
 const latencies: number[] = [];
 
-const messagesPerClient = 10_000;
+const messagesPerClient = 1_000;
 const totalMessagesToSend = messagesPerClient * serverAddresses.length;
 
 let totalReceived = 0;
@@ -30,6 +30,14 @@ function connectToServer(address: string) {
     address,
     reconnectDelayMs: 2000,
     compression: true,
+    channelOptions: {
+      'grpc.keepalive_time_ms': 10_000,
+      'grpc.keepalive_timeout_ms': 5_000,
+      'grpc.keepalive_permit_without_calls': 1,
+    },
+    metadata: {
+      clientId: 'client_xxx:123'
+    }
   });
 
   client.on('connected', (pipe: PipeHandler<ClientSend, ClientReceive>) => {

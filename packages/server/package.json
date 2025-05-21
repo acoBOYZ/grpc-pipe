@@ -1,6 +1,6 @@
 {
   "name": "@grpc-pipe/server",
-  "version": "0.1.53",
+  "version": "0.1.55",
   "author": "ACO .",
   "license": "MIT",
   "type": "module",
@@ -43,16 +43,11 @@
     "src"
   ],
   "scripts": {
-    "clean": "rimraf ./dist && rimraf ./node_modules && rimraf ./coverage",
-    "build": "bun build ./src/index.ts --outdir dist --target node && bun run type:build && echo '[@grpc-pipe/server] build done ✅'",
-    "type:build": "tsc -p tsconfig.json"
+    "clean": "rimraf ./dist && rimraf ./node_modules",
+    "build": "tsc -p tsconfig.json && echo '[@grpc-pipe/server] build done ✅'"
   },
   "dependencies": {
     "@grpc-pipe/core": "workspace:*"
   },
-  "devDependencies": {
-    "@types/bun": "^1.2.13",
-    "@types/node": "^22.15.20",
-    "typescript": "^5.8.3"
-  }
+  "devDependencies": {}
 }

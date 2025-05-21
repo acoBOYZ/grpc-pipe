@@ -221,6 +221,17 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
   }
 
   /**
+   * Fully cleans up internal state: stops heartbeat, clears queues, detaches listeners.
+   * Should be called on disconnect or shutdown.
+   */
+  public destroy(): void {
+    this.destroyHeartBeat();
+    this.callbacks = {};
+    this.postQueue.length = 0;
+    this.queue.kill?.();
+  }
+
+  /**
    * Routes an incoming raw message to the correct handler(s).
    * Also drains the post-send backpressure queue if needed.
    *
