@@ -5,7 +5,10 @@ import {
   credentials,
   Metadata
 } from '@grpc/grpc-js';
-import type { PipeHandlerOptions } from '@grpc-pipe/core';
+import type {
+  PipeHandlerOptions,
+  SchemaRegistry
+} from '@grpc-pipe/core';
 import {
   GrpcClientTransport,
   PipeHandler,
@@ -16,9 +19,11 @@ import {
 /**
  * Configuration options for {@link GrpcPipeClient}.
  */
-export interface GrpcPipeClientOptions extends PipeHandlerOptions {
+export interface GrpcPipeClientOptions<SendMap, ReceiveMap> extends PipeHandlerOptions {
   /** The server address to connect to (e.g. `localhost:50051`). */
   address: string;
+
+  schema?: SchemaRegistry<SendMap, ReceiveMap>;
 
   /** Delay in milliseconds before attempting reconnection after disconnection. Defaults to 2000ms. */
   reconnectDelayMs?: number;
@@ -108,7 +113,7 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
    * @param options.backpressureThresholdBytes - Apply backpressure when transport buffer exceeds this size.
    * @param options.heartbeat - Enables automatic heartbeats (interval or boolean).
    */
-  constructor(private options: GrpcPipeClientOptions) {
+  constructor(private options: GrpcPipeClientOptions<SendMap, ReceiveMap>) {
     super();
     this.reconnectDelayMs = options.reconnectDelayMs ?? 2000;
     this.compression = options.compression ?? false;
@@ -157,7 +162,7 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
     );
 
     const transport = new GrpcClientTransport(this.stream);
-    const pipe = new PipeHandler<SendMap, ReceiveMap>(transport, undefined, {
+    const pipe = new PipeHandler<SendMap, ReceiveMap>(transport, this.options.schema, {
       compression: this.compression,
       backpressureThresholdBytes: this.backpressureThresholdBytes,
       heartbeat: this.heartbeat,

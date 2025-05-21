@@ -28,6 +28,7 @@ function nowMs() {
 function connectToServer(address: string) {
   const client = new GrpcPipeClient<ClientSend, ClientReceive>({
     address,
+    schema: benchmarkClientRegistry,
     reconnectDelayMs: 2000,
     compression: true,
     channelOptions: {
@@ -41,9 +42,8 @@ function connectToServer(address: string) {
   });
 
   client.on('connected', (pipe: PipeHandler<ClientSend, ClientReceive>) => {
-    pipe.useSchema(benchmarkClientRegistry);
-
     console.log(`[CLIENT] Connected to ${address}`);
+    console.log(`[CLIENT] Serialization method '${pipe.serialization}'`);
     connections.set(address, pipe);
 
     pipe.on('pong', (data) => {

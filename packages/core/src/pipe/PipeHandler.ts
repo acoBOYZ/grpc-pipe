@@ -83,6 +83,7 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
       this.ready = new Promise((resolve) => {
         this.resolveReady = resolve;
       });
+      this.useSchema(schema);
     } else {
       this.readyResolved = true;
       this.ready = Promise.resolve();
@@ -131,12 +132,22 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
    *
    * @param schema - A {@link SchemaRegistry} containing encoders/decoders for all message types.
    */
-  public useSchema(schema: SchemaRegistry<SendMap, ReceiveMap>) {
+  private useSchema(schema: SchemaRegistry<SendMap, ReceiveMap>) {
     this.schema = schema;
     if (!this.readyResolved) {
       this.resolveReady();
       this.readyResolved = true;
     }
+  }
+
+  /**
+   * Indicates the serialization format currently in use.
+   *
+   * - `'protobuf'`: A schema has been registered via `useSchema()` or constructor.
+   * - `'json'`: Fallback mode using plain JSON encoding/decoding.
+   */
+  public get serialization(): 'protobuf' | 'json' {
+    return this.schema ? 'protobuf' : 'json';
   }
 
   /**

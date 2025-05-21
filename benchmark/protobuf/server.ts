@@ -11,6 +11,7 @@ type ServerContext = {
 const port = parseInt(process.env.PORT || '50061', 10);
 const server = new GrpcPipeServer<ServerSend, ServerReceive, ServerContext>({
   port,
+  schema: benchmarkServerRegistry,
   compression: true,
   serverOptions: {
     'grpc.keepalive_time_ms': 10_000,
@@ -25,9 +26,8 @@ const server = new GrpcPipeServer<ServerSend, ServerReceive, ServerContext>({
 });
 
 server.on('connection', (pipe) => {
-  pipe.useSchema(benchmarkServerRegistry);
-
   console.log(`[SERVER ${port}] New client connected.`);
+  console.log(`[SERVER] Serialization method '${pipe.serialization}'`);
 
   pipe.on('ping', (data) => {
     // console.log(`[SERVER ${port}] Received ping:`, data);

@@ -8,6 +8,7 @@ import type {
   PipeConnectionHook,
   PipeHandlerOptions,
   PipeMessage,
+  SchemaRegistry,
 } from '@grpc-pipe/core';
 import {
   GrpcServerTransport,
@@ -19,9 +20,11 @@ import {
 /**
  * Configuration options for the {@link GrpcPipeServer}.
  */
-export interface GrpcPipeServerOptions<Ctx extends object = {}> extends PipeHandlerOptions {
+export interface GrpcPipeServerOptions<SendMap, ReceiveMap, Ctx extends object = {}> extends PipeHandlerOptions {
   /** The port number the server should listen on. */
   port: number;
+
+  schema?: SchemaRegistry<SendMap, ReceiveMap>;
 
   /**
    * Optional hook to authenticate or modify the connection before fully establishing it.
@@ -108,7 +111,7 @@ export class GrpcPipeServer<SendMap, ReceiveMap, Ctx extends object = {}> extend
    * @param options.backpressureThresholdBytes - Buffer size before applying write backpressure.
    * @param options.heartbeat - Enable heartbeat pings (boolean or interval object).
    */
-  constructor(private options: GrpcPipeServerOptions<Ctx>) {
+  constructor(private options: GrpcPipeServerOptions<SendMap, ReceiveMap, Ctx>) {
     super();
     this.server = new Server(this.options.serverOptions);
 
@@ -146,7 +149,7 @@ export class GrpcPipeServer<SendMap, ReceiveMap, Ctx extends object = {}> extend
           }
         }
 
-        const pipe = new PipeHandler<SendMap, ReceiveMap, Ctx>(transport, undefined, {
+        const pipe = new PipeHandler<SendMap, ReceiveMap, Ctx>(transport, this.options.schema, {
           compression: this.compression,
           backpressureThresholdBytes: this.backpressureThresholdBytes,
           heartbeat: this.heartbeat,
