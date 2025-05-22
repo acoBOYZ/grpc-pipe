@@ -9,6 +9,7 @@ type ServerReceive = InferReceive<typeof benchmarkServerRegistry>;
 
 const server = new GrpcPipeServer<ServerSend, ServerReceive>({
   port: 50500,
+  schema: benchmarkServerRegistry,
   compression: true,
   serverOptions: {
     'grpc.keepalive_time_ms': 10_000,
@@ -18,8 +19,6 @@ const server = new GrpcPipeServer<ServerSend, ServerReceive>({
 });
 
 server.on('connection', (pipe) => {
-  pipe.useSchema(benchmarkServerRegistry);
-
   const payload = generateBigPayload('initial-ping');
   pipe.post('ping', { message: payload });
 

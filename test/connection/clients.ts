@@ -6,13 +6,14 @@ import { UserProfile } from '../src/benchmark';
 type ClientSend = InferSend<typeof benchmarkClientRegistry>;
 type ClientReceive = InferReceive<typeof benchmarkClientRegistry>;
 
-const TOTAL_CLIENTS = 1_000;
+const TOTAL_CLIENTS = 10;
 
 function startClient(index: number) {
   const clientId = `client-${index}`;
 
   const client = new GrpcPipeClient<ClientSend, ClientReceive>({
     address: 'localhost:50500',
+    schema: benchmarkClientRegistry,
     compression: true,
     heartbeat: false,
     channelOptions: {
@@ -23,8 +24,6 @@ function startClient(index: number) {
   });
 
   client.on('connected', (pipe: PipeHandler<ClientSend, ClientReceive>) => {
-    pipe.useSchema(benchmarkClientRegistry);
-
     pipe.on('ping', (data) => {
       const payload: UserProfile = {
         ...data.message!,

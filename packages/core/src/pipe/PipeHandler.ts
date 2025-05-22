@@ -140,6 +140,11 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
     }
   }
 
+  /** Indicates whether the handler is ready. */
+  public get isReady() {
+    return this.readyResolved;
+  }
+
   /**
    * Indicates the serialization format currently in use.
    *
@@ -221,6 +226,11 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
    */
   public onHeartbeat?: () => void;
 
+  /** Returns true if transport is under backpressure */
+  public get isBackpressured(): boolean {
+    return this.getPendingBytes() >= this.backpressureThresholdBytes;
+  }
+
   /**
    * Stops the automatic heartbeat mechanism (if active).
    * Use this when tearing down a connection intentionally.
@@ -253,7 +263,7 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
 
     if (!this.draining && this.postQueue.length > 0) {
       this.draining = true;
-      while (this.postQueue.length > 0 && this.getPendingBytes() < this.backpressureThresholdBytes) {
+      while (this.postQueue.length > 0 && this.isBackpressured) {
         const next = this.postQueue.shift();
         if (next) {
           await next();

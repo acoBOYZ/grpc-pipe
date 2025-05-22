@@ -21,12 +21,13 @@ test('GrpcPipeServer emits disconnected event per client (Bun)', async () => {
 
     const server = new GrpcPipeServer<ServerSend, ServerReceive>({
       port: PORT,
+      schema: benchmarkServerRegistry,
       compression: false,
-      onConnect: async ({ metadata }) => {
+      beforeConnect: async ({ metadata }) => {
         metadata.set('clientid', clientId);
         return { clientId };
       },
-      onPipeReady: (pipe) => {
+      onConnect: (pipe) => {
         connectedPipe = pipe;
       },
     });
@@ -45,13 +46,13 @@ test('GrpcPipeServer emits disconnected event per client (Bun)', async () => {
 
   const client = new GrpcPipeClient<ClientSend, ClientReceive>({
     address: `localhost:${PORT}`,
+    schema: benchmarkClientRegistry,
     compression: false,
     metadata: { clientid: clientId },
   });
 
   await new Promise<void>((resolve) => {
-    client.on('connected', (pipe) => {
-      pipe.useSchema(benchmarkClientRegistry);
+    client.on('connected', () => {
       setTimeout(() => {
         console.log('[CLIENT] Ending stream');
         client.stream?.end(); // This is the KEY to triggering the disconnect
