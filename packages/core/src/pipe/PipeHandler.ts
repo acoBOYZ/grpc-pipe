@@ -54,6 +54,7 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
   private resolveReady!: () => void;
   private readyResolved = false;
 
+  private globalListener?: <T extends keyof ReceiveMap>(type: T, data: ReceiveMap[T]) => void;
   private postQueue: (() => Promise<void>)[] = [];
   private draining = false;
 
@@ -153,6 +154,10 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
    */
   public get serialization(): 'protobuf' | 'json' {
     return this.schema ? 'protobuf' : 'json';
+  }
+
+  public onAny(listener: (type: keyof ReceiveMap, data: ReceiveMap[keyof ReceiveMap]) => void): void {
+    this.globalListener = listener;
   }
 
   /**
@@ -291,6 +296,7 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
       ? this.schema.receive[type].decode(raw)
       : JSON.parse(raw.toString());
 
+    this.globalListener?.(type, data);
     this.queue.push({ type, data });
   }
 

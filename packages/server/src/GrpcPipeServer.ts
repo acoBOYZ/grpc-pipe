@@ -77,6 +77,15 @@ interface GrpcPipeServerEvents<SendMap, ReceiveMap, Ctx extends object = {}> {
    * @param error - The encountered error.
    */
   error: (error: Error) => void;
+
+  /** Emitted for every message from any pipe */
+  incoming: <T extends keyof ReceiveMap>(
+    payload: {
+      type: T;
+      data: ReceiveMap[T];
+      pipe: PipeHandler<SendMap, ReceiveMap, Ctx>;
+    }
+  ) => void;
 }
 
 /**
@@ -163,6 +172,10 @@ export class GrpcPipeServer<SendMap, ReceiveMap, Ctx extends object = {}> extend
             return;
           }
         }
+
+        pipe.onAny?.((type, data) => {
+          this.emit('incoming', { type, data, pipe });
+        });
 
         this.emit('connection', pipe);
         this.streams.set(stream, pipe);
