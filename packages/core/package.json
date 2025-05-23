@@ -1,9 +1,13 @@
 {
   "name": "@grpc-pipe/core",
-  "version": "0.1.58",
+  "version": "0.1.59",
   "author": "ACO .",
   "license": "MIT",
   "type": "module",
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "keywords": [
@@ -38,10 +42,6 @@
     }
   },
   "sideEffects": false,
-  "files": [
-    "dist",
-    "src"
-  ],
   "scripts": {
     "clean": "rimraf ./dist && rimraf ./node_modules",
     "build": "bun run proto:compile && tsc -p tsconfig.json && echo '[@grpc-pipe/core] build done ✅'",

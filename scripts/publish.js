@@ -20,10 +20,15 @@ const versionTag = process.env.TAG || '0.1.0'
 const npmTag = 'latest' // Always point latest to this version
 const branch = process.env.BRANCH || 'main'
 const tagName = `v${versionTag.replace(/^v/, '')}`
+const npmignorePath = resolve(rootDir, '.npmignore')
 
 console.log(`🔐 Using TAG=${tagName}, BRANCH=${branch}`)
 
 for (const pkg of packages) {
+  const targetIgnorePath = resolve(rootDir, pkg.packageDir, '.npmignore')
+  fs.copyFileSync(npmignorePath, targetIgnorePath)
+  console.log(`📄 Copied .npmignore to ${pkg.name}`)
+  
   const packagePath = resolve(rootDir, pkg.packageDir)
 
   if (!fs.existsSync(packagePath)) {
