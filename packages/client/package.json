@@ -1,6 +1,6 @@
 {
   "name": "@grpc-pipe/client",
-  "version": "0.1.59",
+  "version": "0.1.60",
   "author": "ACO .",
   "license": "MIT",
   "type": "module",
@@ -44,7 +44,9 @@
   "sideEffects": false,
   "scripts": {
     "clean": "rimraf ./dist && rimraf ./node_modules",
-    "build": "tsc -p tsconfig.json && echo '[@grpc-pipe/client] build done ✅'"
+    "build": "bun run build:js && bun run build:types && echo '[@grpc-pipe/client] build done ✅'",
+    "build:js": "tsc -p tsconfig.json",
+    "build:types": "tsc -p tsconfig.types.json"
   },
   "dependencies": {
     "@grpc-pipe/core": "workspace:*"

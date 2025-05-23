@@ -28,7 +28,7 @@ for (const pkg of packages) {
   const targetIgnorePath = resolve(rootDir, pkg.packageDir, '.npmignore')
   fs.copyFileSync(npmignorePath, targetIgnorePath)
   console.log(`📄 Copied .npmignore to ${pkg.name}`)
-  
+
   const packagePath = resolve(rootDir, pkg.packageDir)
 
   if (!fs.existsSync(packagePath)) {
@@ -79,10 +79,11 @@ try {
 
     console.log(`🚀 Pushing tag ${tagName} to ${repoUrlWithToken}`)
 
-    execSync(`git push "${repoUrlWithToken}" ${tagName}`, {
+    execSync('git add .', { cwd: rootDir });
+    execSync(`git commit -m "chore: release v${versionTag}"`, {
       cwd: rootDir,
       stdio: 'inherit',
-    })
+    });
 
     console.log(`✅ Git tag ${tagName} pushed to origin`)
   } else {

@@ -1,11 +1,11 @@
 {
   "compilerOptions": {
     "lib": ["ESNext", "DOM", "DOM.Iterable", "ES2022"],
-    "target": "ESNext",
+    "target": "ES2020",
     "module": "ESNext",
     "moduleResolution": "node",
+    "moduleDetection": "force",
     "jsx": "preserve",
-    "declaration": true,
     "outDir": "dist",
     "types": ["node"],
     "allowJs": false,
