@@ -21,6 +21,18 @@ import {
  * Configuration options for the {@link GrpcPipeServer}.
  */
 export interface GrpcPipeServerOptions<SendMap, ReceiveMap, Ctx extends object = {}> extends PipeHandlerOptions {
+  /**
+   * The host IP address the server should bind to.
+   *
+   * Examples:
+   * - `'127.0.0.1'` for localhost only
+   * - `'0.0.0.0'` to listen on all IPv4 interfaces
+   * - `'::'` to support all IPv6 interfaces
+   *
+   * This value determines which network interfaces the server will accept connections from.
+   */
+  host: string;
+
   /** The port number the server should listen on. */
   port: number;
 
@@ -93,7 +105,7 @@ interface GrpcPipeServerEvents<SendMap, ReceiveMap, Ctx extends object = {}> {
  * real-time, bidirectional communication using the {@link PipeHandler} abstraction.
  *
  * It emits structured events when clients connect or disconnect, provides hooks for
- * authentication (`onConnect`) and initialization (`onPipeReady`), and supports
+ * authentication (`beforeConnect`) and initialization (`onConnect`), and supports
  * advanced transport features like compression, heartbeats, and backpressure.
  *
  * @template SendMap - The message types the server can send to clients.
@@ -112,8 +124,8 @@ export class GrpcPipeServer<SendMap, ReceiveMap, Ctx extends object = {}> extend
    *
    * @param options - Configuration for the server's behavior and transport.
    * @param options.port - The TCP port to listen on (e.g., `50500`).
-   * @param options.onConnect - Optional hook to authenticate clients and return session context.
-   * @param options.onPipeReady - Optional hook fired after `PipeHandler` is created but before `'connection'` is emitted.
+   * @param options.beforeConnect - Optional hook to authenticate clients and return session context.
+   * @param options.onConnect - Optional hook fired after `PipeHandler` is created but before `'connection'` is emitted.
    * @param options.tls - TLS credentials for secure connections. If omitted, server uses insecure transport.
    * @param options.serverOptions - Additional gRPC server/channel options (e.g., keepalive settings).
    * @param options.compression - Enables gzip compression for messages.
@@ -158,17 +170,23 @@ export class GrpcPipeServer<SendMap, ReceiveMap, Ctx extends object = {}> extend
           }
         }
 
-        const pipe = new PipeHandler<SendMap, ReceiveMap, Ctx>(transport, this.options.schema, {
-          compression: this.compression,
-          backpressureThresholdBytes: this.backpressureThresholdBytes,
-          heartbeat: this.heartbeat,
-        }, context);
+        let pipe: PipeHandler<SendMap, ReceiveMap, Ctx>;
+        try {
+          pipe = new PipeHandler<SendMap, ReceiveMap, Ctx>(transport, this.options.schema, {
+            compression: this.compression,
+            backpressureThresholdBytes: this.backpressureThresholdBytes,
+            heartbeat: this.heartbeat,
+          }, context);
+        } catch (err) {
+          stream.destroy(err instanceof Error ? err : new Error('Pipe init failed'));
+          return;
+        }
 
         if (this.options.onConnect) {
           try {
             await this.options.onConnect(pipe);
           } catch (err) {
-            stream.destroy(err instanceof Error ? err : new Error('onPipeReady failed'));
+            stream.destroy(err instanceof Error ? err : new Error('onConnect failed'));
             return;
           }
         }
@@ -211,6 +229,7 @@ export class GrpcPipeServer<SendMap, ReceiveMap, Ctx extends object = {}> extend
   private bind() {
     const creds = this.options.tls
       ? ServerCredentials.createSsl(
+        // `null` means use self-signed / non-root-verified certs
         null,
         [{
           cert_chain: Buffer.isBuffer(this.options.tls.cert)
@@ -225,7 +244,7 @@ export class GrpcPipeServer<SendMap, ReceiveMap, Ctx extends object = {}> extend
       : ServerCredentials.createInsecure();
 
     this.server.bindAsync(
-      `0.0.0.0:${this.options.port}`,
+      `${this.options.host}:${this.options.port}`,
       creds,
       (err, port) => {
         if (err) {

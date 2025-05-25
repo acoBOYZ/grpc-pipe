@@ -10,6 +10,7 @@ type ServerContext = {
 
 const port = parseInt(process.env.PORT || '50061', 10);
 const server = new GrpcPipeServer<ServerSend, ServerReceive, ServerContext>({
+  host: '0.0.0.0',
   port,
   schema: benchmarkServerRegistry,
   compression: true,

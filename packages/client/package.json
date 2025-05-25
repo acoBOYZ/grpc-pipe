@@ -1,6 +1,6 @@
 {
   "name": "@grpc-pipe/client",
-  "version": "0.1.64",
+  "version": "0.1.65",
   "author": "ACO .",
   "license": "MIT",
   "type": "module",

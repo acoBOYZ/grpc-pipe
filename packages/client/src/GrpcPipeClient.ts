@@ -86,12 +86,18 @@ interface GrpcPipeClientEvents<SendMap, ReceiveMap> {
  */
 export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcPipeClientEvents<SendMap, ReceiveMap>> {
   private client?: Client;
-  private readonly reconnectDelayMs: number;
+  private reconnectTimeout?: NodeJS.Timeout;
+
+  private readonly reconnectBaseDelay: number;
+  private currentReconnectDelay: number;
+  private readonly maxReconnectDelay = 30000;
+
   private readonly compression: boolean;
   private readonly backpressureThresholdBytes: number;
   private readonly heartbeat: boolean | { intervalMs?: number };
-  private isReconnecting: boolean = false;
-  private connected: boolean = false;
+
+  private connected = false;
+  private isReconnecting = false;
 
 
   /**
@@ -115,7 +121,8 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
    */
   constructor(private options: GrpcPipeClientOptions<SendMap, ReceiveMap>) {
     super();
-    this.reconnectDelayMs = options.reconnectDelayMs ?? 2000;
+    this.reconnectBaseDelay = options.reconnectDelayMs ?? 2000;
+    this.currentReconnectDelay = this.reconnectBaseDelay;
     this.compression = options.compression ?? false;
     this.backpressureThresholdBytes = options.backpressureThresholdBytes ?? 5 * 1024 * 1024;
     this.heartbeat = options.heartbeat ?? false;
@@ -149,15 +156,31 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
 
     this.client = new Client(this.options.address, creds, this.options.channelOptions);
 
+    const deadline = Date.now() + 5000;
+    this.client.waitForReady(deadline, (err) => {
+      if (err) {
+        console.warn('[GrpcPipeClient] waitForReady failed:', err.message);
+        this.client?.close();
+        this.client = undefined;
+        this.scheduleReconnect();
+        this.isReconnecting = false;
+        return;
+      }
+
+      this.startStream();
+    });
+  }
+
+  private startStream() {
     const metadata = new Metadata();
     for (const [key, value] of Object.entries(this.options.metadata ?? {})) {
       metadata.set(key, value);
     }
 
-    this.stream = this.client.makeBidiStreamRequest(
+    this.stream = this.client!.makeBidiStreamRequest(
       '/pipe.PipeService/Communicate',
-      (message: PipeMessage) => Buffer.from(PipeMessage.encode(message).finish()),
-      (buffer: Buffer) => PipeMessage.decode(buffer),
+      (msg: PipeMessage) => Buffer.from(PipeMessage.encode(msg).finish()),
+      (buf: Buffer) => PipeMessage.decode(buf),
       metadata
     );
 
@@ -168,38 +191,49 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
       heartbeat: this.heartbeat,
     });
 
+    const handleDisconnect = () => {
+      pipe.destroy();
+      this.connected = false;
+      this.isReconnecting = false;
+      this.scheduleReconnect();
+      this.emit('disconnected');
+    };
+
     this.stream.on('metadata', () => {
       if (!this.connected) {
         this.connected = true;
+        this.currentReconnectDelay = this.reconnectBaseDelay;
         this.emit('connected', pipe);
         console.log('[GrpcPipeClient] Connected to server.');
       }
     });
 
-    const connectFn = () => {
-      pipe.destroy();
-      this.connected = false;
-      this.isReconnecting = false;
-      setTimeout(() => this.connect(), this.reconnectDelayMs);
-    }
-
     this.stream.on('error', (err) => {
       this.emit('error', err);
       console.error('[GrpcPipeClient] Stream error:', err.message);
-      connectFn();
+      handleDisconnect();
     });
 
     this.stream.on('end', () => {
-      this.emit('disconnected');
-      console.warn('[GrpcPipeClient] Disconnected from server.');
-      connectFn();
+      console.warn('[GrpcPipeClient] Stream ended.');
+      handleDisconnect();
     });
 
     this.stream.on('close', () => {
-      this.emit('disconnected');
       console.warn('[GrpcPipeClient] Stream closed.');
-      connectFn();
+      handleDisconnect();
     });
+  }
+
+  private scheduleReconnect() {
+    if (this.reconnectTimeout) return;
+
+    this.currentReconnectDelay = Math.min(this.currentReconnectDelay * 2, this.maxReconnectDelay);
+
+    this.reconnectTimeout = setTimeout(() => {
+      this.reconnectTimeout = undefined;
+      this.connect();
+    }, this.currentReconnectDelay);
   }
 
   /**
@@ -217,6 +251,11 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
    * ```
    */
   public close() {
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = undefined;
+    }
+
     try {
       this.stream?.end();
       this.client?.close();
@@ -233,6 +272,11 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
    */
   public destroy() {
     this.isReconnecting = true;
+
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = undefined;
+    }
 
     try {
       this.stream?.removeAllListeners();
