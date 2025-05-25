@@ -1,6 +1,6 @@
 {
   "name": "@grpc-pipe/core",
-  "version": "0.1.62",
+  "version": "0.1.63",
   "author": "ACO .",
   "license": "MIT",
   "type": "module",
@@ -48,6 +48,11 @@
     "build:js": "tsc -p tsconfig.json",
     "build:types": "tsc -p tsconfig.types.json",
     "proto:compile": "protoc --ts_proto_out=src/types --ts_proto_opt=outputServices=grpc-js --proto_path=proto proto/*.proto"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.5.0",
+    "@grpc/grpc-js": "^1.13.4",
+    "fastq": "^1.19.1"
   },
   "devDependencies": {}
 }
