@@ -185,11 +185,18 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
     );
 
     const transport = new GrpcClientTransport(this.stream);
-    const pipe = new PipeHandler<SendMap, ReceiveMap>(transport, this.options.schema, {
-      compression: this.compression,
-      backpressureThresholdBytes: this.backpressureThresholdBytes,
-      heartbeat: this.heartbeat,
-    });
+
+    let pipe: PipeHandler<SendMap, ReceiveMap>;
+    try {
+      pipe = new PipeHandler<SendMap, ReceiveMap>(transport, this.options.schema, {
+        compression: this.compression,
+        backpressureThresholdBytes: this.backpressureThresholdBytes,
+        heartbeat: this.heartbeat,
+      });
+    } catch (err) {
+      this.stream.destroy(err instanceof Error ? err : new Error('Pipe init failed'));
+      return;
+    }
 
     const handleDisconnect = () => {
       pipe.destroy();
