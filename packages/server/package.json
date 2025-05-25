@@ -1,6 +1,6 @@
 {
   "name": "@grpc-pipe/server",
-  "version": "0.1.63",
+  "version": "0.1.64",
   "author": "ACO .",
   "license": "MIT",
   "type": "module",
@@ -8,8 +8,14 @@
     "dist",
     "README.md"
   ],
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/types/index.d.ts"
+    }
+  },
   "keywords": [
     "grpc",
     "grpc communication",
@@ -36,17 +42,13 @@
     "bun": ">=1",
     "node": ">=18"
   },
-  "exports": {
-    ".": {
-      "import": "./dist/index.js"
-    }
-  },
   "sideEffects": false,
   "scripts": {
     "clean": "rimraf ./dist && rimraf ./node_modules",
-    "build": "bun run build:js && bun run build:types && echo '[@grpc-pipe/server] build done ✅'",
+    "build": "bun run build:js && bun run build:cjs && bun run build:types && echo '[@grpc-pipe/server] build done ✅'",
     "build:js": "tsc -p tsconfig.json",
-    "build:types": "tsc -p tsconfig.types.json"
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:types": "tsc -p tsconfig.types.json && cp dist/types/index.d.ts dist/index.d.ts"
   },
   "dependencies": {
     "@grpc-pipe/core": "^0.1.63",
