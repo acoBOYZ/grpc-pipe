@@ -270,21 +270,28 @@ export class GrpcPipeServer<SendMap, ReceiveMap, Ctx extends object = {}> extend
    */
   public async destroy(): Promise<void> {
     return new Promise((resolve) => {
-      this.server.tryShutdown((err) => {
-        if (err) this.emit('error', err);
-        resolve();
-      });
-
       for (const [stream, pipe] of this.streams.entries()) {
         try {
           stream.destroy();
           pipe.destroy();
           this.emit('disconnected', pipe);
-        } catch (_) {/* empty */ }
+        } catch (_) {/* ignored */ }
       }
 
       this.streams.clear();
       this.removeAllListeners();
+
+      const shutdownTimeout = setTimeout(() => {
+        console.warn('⚠️ Force shutting down gRPC server after timeout');
+        this.server.forceShutdown();
+        resolve();
+      }, 5_000);
+
+      this.server.tryShutdown((err) => {
+        clearTimeout(shutdownTimeout);
+        if (err) this.emit('error', err);
+        resolve();
+      });
     });
   }
 }
