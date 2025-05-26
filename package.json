@@ -13,7 +13,9 @@
     "build:core": "bun run --cwd packages/core build",
     "build:client": "bun run --cwd packages/client build",
     "build:server": "bun run --cwd packages/server build",
-    "publish:ci": "bun run scripts/publish.js"
+    "push": "bun run bump && bun run publish:ci",
+    "publish:ci": "bun run scripts/publish.js",
+    "bump": "bun run scripts/bump.js"
   },
   "type": "module",
   "workspaces": [

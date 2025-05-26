@@ -1,6 +1,6 @@
 {
   "name": "@grpc-pipe/server",
-  "version": "0.1.66",
+  "version": "0.1.67",
   "author": "ACO .",
   "license": "MIT",
   "type": "module",
@@ -8,11 +8,13 @@
     "dist",
     "README.md"
   ],
+  "main": "./dist/cjs/index.cjs",
+  "module": "./dist/esm/index.js",
   "types": "./dist/types/index.d.ts",
   "exports": {
     ".": {
+      "require": "./dist/cjs/index.cjs",
       "import": "./dist/esm/index.js",
-      "require": "./dist/cjs/index.js",
       "types": "./dist/types/index.d.ts"
     }
   },
@@ -45,13 +47,14 @@
   "sideEffects": false,
   "scripts": {
     "clean": "rimraf ./dist && rimraf ./node_modules",
-    "build": "bun run build:js && bun run build:cjs && bun run build:types && echo '[@grpc-pipe/server] build done ✅'",
-    "build:js": "tsc -p tsconfig.json",
-    "build:cjs": "tsc -p tsconfig.cjs.json",
-    "build:types": "tsc -p tsconfig.types.json && cp dist/types/index.d.ts dist/index.d.ts"
+    "build": "bun run clean && bun run build:cjs && bun run build:esm && bun run build:types && echo '[@grpc-pipe/server] build done ✅'",
+    "build:esm": "tsc -p tsconfig.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json && bun run rename:cjs",
+    "rename:cjs": "find dist/cjs -name '*.js' -exec bash -c 'mv \"$0\" \"${0%.js}.cjs\"' {} \\;",
+    "build:types": "tsc -p tsconfig.types.json"
   },
   "dependencies": {
-    "@grpc-pipe/core": "^0.1.63",
+    "@grpc-pipe/core": "^0.1.67",
     "@grpc/grpc-js": "^1.13.4"
   },
   "devDependencies": {}

@@ -2,6 +2,7 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "module": "CommonJS",
+    "target": "ES2019",
     "declaration": false,
     "emitDeclarationOnly": false,
     "removeComments": true,

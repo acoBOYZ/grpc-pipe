@@ -31,7 +31,7 @@ export interface GrpcPipeClientOptions<SendMap, ReceiveMap> extends PipeHandlerO
   /**
    * Optional metadata to send during the initial connection.
    * Example:
-   * `{ authorization: 'Bearer abc', clientId: '123' }`
+   * `{ authorization: 'Bearer token', clientId: 'id' }`
    */
   metadata?: Record<string, string>;
 
