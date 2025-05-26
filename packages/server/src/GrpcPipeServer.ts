@@ -251,17 +251,22 @@ export class GrpcPipeServer<SendMap, ReceiveMap, Ctx extends object = {}> extend
       )
       : ServerCredentials.createInsecure();
 
-    this.server.bindAsync(
-      `${this.options.host}:${this.options.port}`,
-      creds,
-      (err, port) => {
-        if (err) {
-          this.emit('error', err);
-          return;
+    try {
+      this.server.bindAsync(
+        `${this.options.host}:${this.options.port}`,
+        creds,
+        (err, port) => {
+          if (err) {
+            this.emit('error', err);
+            return;
+          }
+          console.log(`[GrpcPipeServer] Listening on port ${port}`);
         }
-        console.log(`[GrpcPipeServer] Listening on port ${port}`);
-      }
-    );
+      );
+    } catch (err) {
+      console.error('❌ Failed to bind gRPC server:', (err as Error).message);
+      // No throw here!
+    }
   }
 
   /**
