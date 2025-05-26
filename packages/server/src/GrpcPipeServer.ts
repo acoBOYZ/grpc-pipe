@@ -275,7 +275,7 @@ export class GrpcPipeServer<SendMap, ReceiveMap, Ctx extends object = {}> extend
           stream.destroy();
           pipe.destroy();
           this.emit('disconnected', pipe);
-        } catch (_) {/* ignored */ }
+        } catch (_) { /* ignored */ }
       }
 
       this.streams.clear();

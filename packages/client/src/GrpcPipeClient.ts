@@ -87,6 +87,7 @@ interface GrpcPipeClientEvents<SendMap, ReceiveMap> {
 export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcPipeClientEvents<SendMap, ReceiveMap>> {
   private client?: Client;
   private reconnectTimeout?: NodeJS.Timeout;
+  private shouldReconnect: boolean = true;
 
   private readonly reconnectBaseDelay: number;
   private currentReconnectDelay: number;
@@ -139,12 +140,17 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
    * - `'error'` when a stream or network error occurs.
    */
   private connect() {
+    console.log('[GrpcPipeClient] Attempting to connect...');
+    if (this.isReconnecting) {
+      console.log('[GrpcPipeClient] Skipping connect — already reconnecting');
+      return;
+    }
+    this.isReconnecting = true;
+    this.shouldReconnect = true;
+
     if (typeof this.options.address !== 'string') {
       throw new TypeError(`Invalid gRPC server address: ${this.options.address}`);
     }
-
-    if (this.isReconnecting) return;
-    this.isReconnecting = true;
 
     const creds = this.options.tls
       ? credentials.createSsl(
@@ -216,8 +222,17 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
     });
 
     this.stream.on('error', (err) => {
-      this.emit('error', err);
-      console.error('[GrpcPipeClient] Stream error:', err.message);
+      // UNAVAILABLE, INTERNAL, DEADLINE_EXCEEDED
+      const knownDisconnectCodes = [14, 13, 4];
+      const grpcCode = (err as any).code;
+
+      if (knownDisconnectCodes.includes(grpcCode)) {
+        console.warn(`[GrpcPipeClient] Recoverable gRPC error: ${err.message}`);
+      } else {
+        this.emit('error', err);
+        console.error('[GrpcPipeClient] Unexpected gRPC error:', err.message);
+      }
+
       handleDisconnect();
     });
 
@@ -230,12 +245,16 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
       console.warn('[GrpcPipeClient] Stream closed.');
       handleDisconnect();
     });
+
+    // A dumy error handler for safe catch
+    this.on('error', () => { /* ignored */ })
   }
 
   private scheduleReconnect() {
-    if (this.reconnectTimeout) return;
+    if (!this.shouldReconnect || this.reconnectTimeout) return;
 
     this.currentReconnectDelay = Math.min(this.currentReconnectDelay * 2, this.maxReconnectDelay);
+    console.log(`[GrpcPipeClient] Reconnecting in ${this.currentReconnectDelay}ms...`);
 
     this.reconnectTimeout = setTimeout(() => {
       this.reconnectTimeout = undefined;
@@ -278,6 +297,7 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
    * - Removes all listeners
    */
   public destroy() {
+    this.shouldReconnect = false;
     this.isReconnecting = true;
 
     if (this.reconnectTimeout) {
