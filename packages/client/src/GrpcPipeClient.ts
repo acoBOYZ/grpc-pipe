@@ -178,7 +178,7 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
     }
 
     this.stream = this.client!.makeBidiStreamRequest(
-      '/pipe.PipeService/Communicate',
+      '/com.PipeService/Communicate',
       (msg: com.PipeMessage) => Buffer.from(com.PipeMessage.encode(msg).finish()),
       (buf: Buffer) => com.PipeMessage.decode(buf),
       metadata
