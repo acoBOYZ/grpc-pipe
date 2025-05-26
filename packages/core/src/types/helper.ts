@@ -1,4 +1,4 @@
-import type { MessageFns } from "./pipe";
+import type { MessageFns } from "./pipe.js";
 
 /**
  * Infers the argument types for each message function in the `send` field of a given object type.

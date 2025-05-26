@@ -1,1 +1,1 @@
-export * from './SchemaRegistry'
+export * from './SchemaRegistry.js'

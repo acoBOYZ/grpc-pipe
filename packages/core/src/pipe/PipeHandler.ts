@@ -1,8 +1,8 @@
-import type { Transport } from '../transports/Transport';
-import type { SchemaRegistry } from '../schema/SchemaRegistry';
+import type { Transport } from '../transports/Transport.js';
+import type { SchemaRegistry } from '../schema/SchemaRegistry.js';
 import os from 'os';
 import { type queueAsPromised, promise as fastqPromise } from 'fastq';
-import { compress, decompress } from '../utils/compression';
+import { compress, decompress } from '../utils/compression.js';
 
 /**
  * Configuration options for {@link PipeHandler}.

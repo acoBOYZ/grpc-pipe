@@ -1,3 +1,3 @@
-export * from './GrpcClientTransport'
-export * from './GrpcServerTransport'
-export * from './Transport'
+export * from './GrpcClientTransport.js'
+export * from './GrpcServerTransport.js'
+export * from './Transport.js'

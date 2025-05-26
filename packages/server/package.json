@@ -1,21 +1,13 @@
 {
   "name": "@grpc-pipe/server",
-  "version": "0.1.69",
+  "version": "0.2.0",
   "author": "ACO .",
   "license": "MIT",
   "type": "module",
-  "files": [
-    "dist",
-    "README.md"
-  ],
-  "main": "./dist/cjs/index.js",
-  "module": "./dist/esm/index.js",
-  "types": "./dist/types/index.d.ts",
   "exports": {
     ".": {
-      "require": "./dist/cjs/index.js",
-      "import": "./dist/esm/index.js",
-      "types": "./dist/types/index.d.ts"
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
     }
   },
   "keywords": [
@@ -45,15 +37,18 @@
     "node": ">=18"
   },
   "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "clean": "rimraf ./dist && rimraf ./node_modules",
-    "build": "bun run clean && bun run build:cjs && bun run build:esm && bun run build:types && echo '[@grpc-pipe/server] build done ✅'",
+    "build": "bun run clean && bun run build:esm && bun run build:types && echo '[@grpc-pipe/server] build done ✅'",
     "build:esm": "tsc -p tsconfig.json",
-    "build:cjs": "tsc -p tsconfig.cjs.json",
     "build:types": "tsc -p tsconfig.types.json"
   },
   "dependencies": {
-    "@grpc-pipe/core": "^0.1.69",
+    "@grpc-pipe/core": "^0.2.0",
     "@grpc/grpc-js": "^1.13.4"
   },
   "devDependencies": {}

@@ -1,6 +1,6 @@
-import type { Transport } from './Transport';
+import type { Transport } from './Transport.js';
 import type { ServerDuplexStream } from '@grpc/grpc-js';
-import type { PipeMessage } from '../types';
+import type { PipeMessage } from '../types/index.js';
 
 /**
  * GrpcServerTransport wraps a gRPC server duplex stream

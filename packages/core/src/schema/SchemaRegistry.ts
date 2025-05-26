@@ -1,4 +1,4 @@
-import type { MessageFns } from "../types";
+import type { MessageFns } from "../types/index.js";
 
 /**
  * SchemaRegistry is a map of type names to their protobuf constructors.

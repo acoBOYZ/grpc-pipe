@@ -1,2 +1,2 @@
-export * from './pipe'
-export * from './helper'
+export * from './pipe.js'
+export type { InferReceive, InferSend } from './helper.js'

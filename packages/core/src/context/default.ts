@@ -1,6 +1,6 @@
 import type { Metadata, ServerDuplexStream } from "@grpc/grpc-js";
-import type { Transport } from "../transports";
-import type { PipeMessage } from "../types";
+import type { Transport } from "../transports/index.js";
+import type { PipeMessage } from "../types/index.js";
 
 export type Context = Record<string, unknown>;
 
