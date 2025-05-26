@@ -5,15 +5,9 @@ import { execSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import fs from 'node:fs'
+import { packages } from './_packages'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
-
-/** Manual list of packages to publish */
-const packages = [
-  { name: '@grpc-pipe/core', packageDir: 'packages/core' },
-  { name: '@grpc-pipe/client', packageDir: 'packages/client' },
-  { name: '@grpc-pipe/server', packageDir: 'packages/server' }
-]
 
 const rootDir = resolve(__dirname, '..')
 const versionTag = process.env.TAG || '0.1.0'

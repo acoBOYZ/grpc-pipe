@@ -3,15 +3,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { packages } from './_packages'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-
-// 🔧 Configure your internal packages here
-const packages = [
-  { name: '@grpc-pipe/core', packageDir: 'packages/core' },
-  { name: '@grpc-pipe/client', packageDir: 'packages/client' },
-  { name: '@grpc-pipe/server', packageDir: 'packages/server' }
-]
 
 const rootDir = path.resolve(__dirname, '..')
 const versionTag = process.env.TAG || '0.1.0'

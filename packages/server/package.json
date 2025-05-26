@@ -1,6 +1,6 @@
 {
   "name": "@grpc-pipe/server",
-  "version": "0.1.67",
+  "version": "0.1.68",
   "author": "ACO .",
   "license": "MIT",
   "type": "module",
@@ -54,7 +54,7 @@
     "build:types": "tsc -p tsconfig.types.json"
   },
   "dependencies": {
-    "@grpc-pipe/core": "^0.1.67",
+    "@grpc-pipe/core": "^0.1.68",
     "@grpc/grpc-js": "^1.13.4"
   },
   "devDependencies": {}
