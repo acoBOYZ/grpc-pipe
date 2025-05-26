@@ -1,3 +1,3 @@
-export * from './GrpcClientTransport.js'
-export * from './GrpcServerTransport.js'
-export * from './Transport.js'
+export type { Transport } from './Transport.js'
+export { GrpcClientTransport } from './GrpcClientTransport.js'
+export { GrpcServerTransport } from './GrpcServerTransport.js'

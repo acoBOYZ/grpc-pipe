@@ -1,1 +1,1 @@
-export * from './default.js'
+export type { Context, PipeConnectionHook } from './default.js'

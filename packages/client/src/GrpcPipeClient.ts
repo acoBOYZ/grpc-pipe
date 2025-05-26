@@ -12,8 +12,8 @@ import type {
 import {
   GrpcClientTransport,
   PipeHandler,
-  PipeMessage,
   TypedEventEmitter,
+  com,
 } from '@grpc-pipe/core';
 
 /**
@@ -104,7 +104,7 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
    * Exposes the raw gRPC duplex stream used for communication.
    * Intended primarily for testing or low-level access.
    */
-  public stream?: ClientDuplexStream<PipeMessage, PipeMessage>;
+  public stream?: ClientDuplexStream<com.PipeMessage, com.PipeMessage>;
 
   /**
    * Creates a new instance of {@link GrpcPipeClient}.
@@ -179,8 +179,8 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
 
     this.stream = this.client!.makeBidiStreamRequest(
       '/pipe.PipeService/Communicate',
-      (msg: PipeMessage) => Buffer.from(PipeMessage.encode(msg).finish()),
-      (buf: Buffer) => PipeMessage.decode(buf),
+      (msg: com.PipeMessage) => Buffer.from(com.PipeMessage.encode(msg).finish()),
+      (buf: Buffer) => com.PipeMessage.decode(buf),
       metadata
     );
 

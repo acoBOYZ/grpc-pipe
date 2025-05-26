@@ -2,7 +2,7 @@
 // versions:
 //   protoc-gen-ts_proto  v2.7.0
 //   protoc               v5.29.3
-// source: pipe.proto
+// source: com.proto
 
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
@@ -18,7 +18,7 @@ import {
   type UntypedServiceImplementation,
 } from "@grpc/grpc-js";
 
-export const protobufPackage = "pipe";
+export const protobufPackage = "com";
 
 /**
  * PipeMessage represents a generic message used in the Pipe communication system.
@@ -120,7 +120,7 @@ export const PipeMessage: MessageFns<PipeMessage> = {
 export type PipeServiceService = typeof PipeServiceService;
 export const PipeServiceService = {
   communicate: {
-    path: "/pipe.PipeService/Communicate",
+    path: "/com.PipeService/Communicate",
     requestStream: true,
     responseStream: true,
     requestSerialize: (value: PipeMessage) => Buffer.from(PipeMessage.encode(value).finish()),
@@ -140,7 +140,7 @@ export interface PipeServiceClient extends Client {
   communicate(metadata: Metadata, options?: Partial<CallOptions>): ClientDuplexStream<PipeMessage, PipeMessage>;
 }
 
-export const PipeServiceClient = makeGenericClientConstructor(PipeServiceService, "pipe.PipeService") as unknown as {
+export const PipeServiceClient = makeGenericClientConstructor(PipeServiceService, "com.PipeService") as unknown as {
   new (address: string, credentials: ChannelCredentials, options?: Partial<ClientOptions>): PipeServiceClient;
   service: typeof PipeServiceService;
   serviceName: string;

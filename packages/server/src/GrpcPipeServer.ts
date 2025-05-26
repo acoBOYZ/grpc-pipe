@@ -7,14 +7,13 @@ import {
 import type {
   PipeConnectionHook,
   PipeHandlerOptions,
-  PipeMessage,
-  SchemaRegistry,
+  SchemaRegistry
 } from '@grpc-pipe/core';
 import {
   GrpcServerTransport,
   PipeHandler,
-  PipeServiceService,
   TypedEventEmitter,
+  com
 } from '@grpc-pipe/core';
 
 /**
@@ -117,7 +116,7 @@ export class GrpcPipeServer<SendMap, ReceiveMap, Ctx extends object = {}> extend
   private backpressureThresholdBytes: number;
   private readonly heartbeat: boolean | { intervalMs?: number };
 
-  private streams = new Map<ServerDuplexStream<PipeMessage, PipeMessage>, PipeHandler<SendMap, ReceiveMap, Ctx>>();
+  private streams = new Map<ServerDuplexStream<com.PipeMessage, com.PipeMessage>, PipeHandler<SendMap, ReceiveMap, Ctx>>();
 
   /**
    * Constructs a new {@link GrpcPipeServer}.
@@ -140,8 +139,8 @@ export class GrpcPipeServer<SendMap, ReceiveMap, Ctx extends object = {}> extend
     this.backpressureThresholdBytes = options.backpressureThresholdBytes ?? 5 * 1024 * 1024;
     this.heartbeat = options.heartbeat ?? true;
 
-    this.server.addService(PipeServiceService, {
-      communicate: async (stream: ServerDuplexStream<PipeMessage, PipeMessage>) => {
+    this.server.addService(com.PipeServiceService, {
+      communicate: async (stream: ServerDuplexStream<com.PipeMessage, com.PipeMessage>) => {
         const existing = this.streams.get(stream);
 
         if (existing && !stream.destroyed && !stream.writableEnded) {

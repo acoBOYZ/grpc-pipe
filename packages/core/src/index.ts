@@ -1,4 +1,4 @@
-export * from './types/index.js'
+export type { InferReceive, InferSend } from './types/index.js'
 export type { Context, PipeConnectionHook } from './context/index.js'
 export type { PipeHandlerOptions } from './pipe/index.js';
 export { PipeHandler, TypedEventEmitter } from './pipe/index.js';
@@ -7,3 +7,5 @@ export { GrpcServerTransport, GrpcClientTransport } from './transports/index.js'
 
 export type { SchemaRegistry } from './schema/index.js'
 export { createSchemaRegistry } from './schema/index.js'
+
+export * as com from './com.js'

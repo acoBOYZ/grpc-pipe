@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package pipe;
+package com;
 
 /**
  * PipeMessage represents a generic message used in the Pipe communication system.

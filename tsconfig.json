@@ -1,12 +1,10 @@
 {
   "compilerOptions": {
-    "lib": ["ESNext", "DOM", "DOM.Iterable", "ES2022"],
+    "lib": ["ESNext", "ES2022"],
     "target": "ES2020",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "moduleDetection": "force",
-    "jsx": "preserve",
-    "outDir": "dist",
     "types": ["node"],
     "allowJs": false,
     "allowSyntheticDefaultImports": true,
@@ -17,6 +15,7 @@
     "noUnusedParameters": true,
     "strictNullChecks": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true
   }
 }

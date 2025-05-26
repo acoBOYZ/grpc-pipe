@@ -1,6 +1,6 @@
 {
   "name": "@grpc-pipe/core",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": "ACO .",
   "license": "MIT",
   "type": "module",
@@ -46,7 +46,7 @@
     "build": "bun run proto:compile && bun run clean && bun run build:esm && bun run build:types && echo '[@grpc-pipe/core] build done ✅'",
     "build:esm": "tsc -p tsconfig.json",
     "build:types": "tsc -p tsconfig.types.json",
-    "proto:compile": "protoc --ts_proto_out=src/types --ts_proto_opt=outputServices=grpc-js --proto_path=proto proto/*.proto"
+    "proto:compile": "protoc --ts_proto_out=src --ts_proto_opt=outputServices=grpc-js --proto_path=proto proto/*.proto"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.5.0",
