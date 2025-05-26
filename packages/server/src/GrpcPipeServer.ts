@@ -111,6 +111,7 @@ interface GrpcPipeServerEvents<SendMap, ReceiveMap, Ctx extends object = {}> {
  * @template ReceiveMap - The message types the server can receive from clients.
  */
 export class GrpcPipeServer<SendMap, ReceiveMap, Ctx extends object = {}> extends TypedEventEmitter<GrpcPipeServerEvents<SendMap, ReceiveMap, Ctx>> {
+  private static instance?: GrpcPipeServer<any, any, {}>;
   private server: Server;
   private compression: boolean;
   private backpressureThresholdBytes: number;
@@ -133,6 +134,14 @@ export class GrpcPipeServer<SendMap, ReceiveMap, Ctx extends object = {}> extend
    */
   constructor(private options: GrpcPipeServerOptions<SendMap, ReceiveMap, Ctx>) {
     super();
+
+    if (GrpcPipeServer.instance) {
+      GrpcPipeServer.instance.destroy().catch((err) => {
+        console.warn('[GrpcPipeServer] ⚠️ Failed to shutdown previous gRPC instance:', err);
+      });
+    }
+
+    GrpcPipeServer.instance = this;
     this.server = new Server(this.options.serverOptions);
 
     this.compression = options.compression ?? false;
