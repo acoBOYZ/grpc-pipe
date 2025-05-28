@@ -1,8 +1,8 @@
 import { GrpcPipeServer } from '@grpc-pipe/server';
 import { GrpcPipeClient } from '@grpc-pipe/client';
-import { benchmarkClientRegistry, benchmarkServerRegistry } from './src/schema';
+import { benchmarkClientRegistry, benchmarkServerRegistry } from './src/schema.js';
 import type { InferReceive, InferSend } from '@grpc-pipe/server';
-import { generateBigPayload } from './src/payload';
+import { generateBigPayload } from './src/payload.js';
 
 type ServerSend = InferSend<typeof benchmarkServerRegistry>;
 type ServerReceive = InferReceive<typeof benchmarkServerRegistry>;
@@ -24,6 +24,7 @@ test('GrpcPipeServer global incoming emits correct payloads for each client', as
   let remaining = CLIENT_COUNT;
 
   const server = new GrpcPipeServer<ServerSend, ServerReceive, { clientId: string; }>({
+    host: 'localhost',
     port: PORT,
     schema: benchmarkServerRegistry,
     compression: false,

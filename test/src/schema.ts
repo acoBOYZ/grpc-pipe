@@ -1,7 +1,7 @@
 // src/schema/benchmarkRegistry.ts
 
 import { createSchemaRegistry } from '@grpc-pipe/core';
-import { Ping, Pong } from './benchmark';
+import { Ping, Pong } from './benchmark.js';
 
 // Client schema
 export const benchmarkClientRegistry = createSchemaRegistry({

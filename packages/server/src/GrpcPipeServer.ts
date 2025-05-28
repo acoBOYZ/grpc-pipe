@@ -16,6 +16,14 @@ import {
   com
 } from '@grpc-pipe/core';
 
+type IncomingPayload<SendMap, ReceiveMap, Ctx extends object = {}> = {
+  [K in keyof ReceiveMap]: {
+    type: K;
+    data: ReceiveMap[K];
+    pipe: PipeHandler<SendMap, ReceiveMap, Ctx>;
+  }
+}[keyof ReceiveMap];
+
 /**
  * Configuration options for the {@link GrpcPipeServer}.
  */
@@ -90,13 +98,7 @@ interface GrpcPipeServerEvents<SendMap, ReceiveMap, Ctx extends object = {}> {
   error: (error: Error) => void;
 
   /** Emitted for every message from any pipe */
-  incoming: <T extends keyof ReceiveMap>(
-    payload: {
-      type: T;
-      data: ReceiveMap[T];
-      pipe: PipeHandler<SendMap, ReceiveMap, Ctx>;
-    }
-  ) => void;
+  incoming: (payload: IncomingPayload<SendMap, ReceiveMap, Ctx>) => void;
 }
 
 /**
