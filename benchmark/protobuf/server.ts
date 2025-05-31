@@ -12,8 +12,8 @@ const port = parseInt(process.env.PORT || '50061', 10);
 const server = new GrpcPipeServer<ServerSend, ServerReceive, ServerContext>({
   host: '0.0.0.0',
   port,
-  schema: benchmarkServerRegistry,
-  compression: true,
+  // schema: benchmarkServerRegistry,
+  compression: false,
   serverOptions: {
     'grpc.keepalive_time_ms': 10_000,
     'grpc.keepalive_timeout_ms': 5_000,

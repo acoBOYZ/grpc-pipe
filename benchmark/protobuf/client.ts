@@ -28,9 +28,9 @@ function nowMs() {
 function connectToServer(address: string) {
   const client = new GrpcPipeClient<ClientSend, ClientReceive>({
     address,
-    schema: benchmarkClientRegistry,
+    // schema: benchmarkClientRegistry,
     reconnectDelayMs: 2000,
-    compression: true,
+    compression: false,
     channelOptions: {
       'grpc.keepalive_time_ms': 10_000,
       'grpc.keepalive_timeout_ms': 5_000,
