@@ -1,13 +1,14 @@
 // --- server.ts ---
 import { GrpcPipeServer } from '@grpc-pipe/server';
-import { benchmarkServerRegistry } from '../src/schema';
+import { benchmarkServerRegistry } from '../src/schema.js';
 import type { InferReceive, InferSend } from '@grpc-pipe/server';
-import { generateBigPayload } from '../src/payload';
+import { generateBigPayload } from '../src/payload.js';
 
 type ServerSend = InferSend<typeof benchmarkServerRegistry>;
 type ServerReceive = InferReceive<typeof benchmarkServerRegistry>;
 
 const server = new GrpcPipeServer<ServerSend, ServerReceive>({
+  host: 'localhost',
   port: 50500,
   schema: benchmarkServerRegistry,
   compression: true,

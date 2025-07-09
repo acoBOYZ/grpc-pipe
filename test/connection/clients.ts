@@ -1,7 +1,7 @@
 import { GrpcPipeClient } from '@grpc-pipe/client';
-import { benchmarkClientRegistry } from '../src/schema';
+import { benchmarkClientRegistry } from '../src/schema.js';
 import type { PipeHandler, InferSend, InferReceive } from '@grpc-pipe/client';
-import { UserProfile } from '../src/benchmark';
+import { UserProfile } from '../src/benchmark.js';
 
 type ClientSend = InferSend<typeof benchmarkClientRegistry>;
 type ClientReceive = InferReceive<typeof benchmarkClientRegistry>;

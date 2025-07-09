@@ -13,7 +13,7 @@ import {
   GrpcClientTransport,
   PipeHandler,
   TypedEventEmitter,
-  com,
+  com
 } from '@grpc-pipe/core';
 
 /**
@@ -141,6 +141,7 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
    */
   private connect() {
     console.log('[GrpcPipeClient] Attempting to connect...');
+    console.log('[DEBUG] Using TLS:', !!this.options.tls);
     if (this.isReconnecting) {
       console.log('[GrpcPipeClient] Skipping connect — already reconnecting');
       return;
@@ -178,11 +179,17 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
   }
 
   private startStream() {
+    console.log('[DEBUG] typeof com:', typeof com);
+    console.log('[DEBUG] com keys:', Object.keys(com));
+    console.log('[DEBUG] PipeServiceService keys:', Object.keys(com?.PipeServiceService || {}));
+
     const metadata = new Metadata();
     for (const [key, value] of Object.entries(this.options.metadata ?? {})) {
       metadata.set(key, value);
     }
 
+    console.log('[DEBUG] PipeMessage.encode:', typeof com?.PipeMessage?.encode);
+    console.log('[DEBUG] PipeMessage.decode:', typeof com?.PipeMessage?.decode);
     this.stream = this.client!.makeBidiStreamRequest(
       '/com.PipeService/Communicate',
       (msg: com.PipeMessage) => Buffer.from(com.PipeMessage.encode(msg).finish()),

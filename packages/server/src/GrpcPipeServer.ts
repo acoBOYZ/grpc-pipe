@@ -152,6 +152,10 @@ export class GrpcPipeServer<SendMap, ReceiveMap, Ctx extends object = {}> extend
 
     this.server.addService(com.PipeServiceService, {
       communicate: async (stream: ServerDuplexStream<com.PipeMessage, com.PipeMessage>) => {
+        console.log('[DEBUG SERVER] com keys:', Object.keys(com));
+        console.log('[DEBUG SERVER] PipeServiceService keys:', Object.keys(com?.PipeServiceService || {}));
+        console.log('[DEBUG SERVER] typeof PipeMessage.encode:', typeof com?.PipeMessage?.encode);
+
         const existing = this.streams.get(stream);
 
         if (existing && !stream.destroyed && !stream.writableEnded) {
@@ -269,6 +273,9 @@ export class GrpcPipeServer<SendMap, ReceiveMap, Ctx extends object = {}> extend
       console.error('❌ Failed to bind gRPC server:', (err as Error).message);
       // No throw here!
     }
+
+    console.log('[DEBUG SERVER] Bound to:', `${this.options.host}:${this.options.port}`);
+    console.log('[DEBUG SERVER] Using TLS:', !!this.options.tls);
   }
 
   /**
