@@ -121,7 +121,7 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
         }
 
         if (process.env.DEBUG?.includes('pipe:heartbeat')) {
-          console.log(`[PipeHandler] Sent heartbeat at ${new Date().toISOString()}`);
+          console.debug(`[PipeHandler] Sent heartbeat at ${new Date().toISOString()}`);
         }
       }, intervalMs);
     }
