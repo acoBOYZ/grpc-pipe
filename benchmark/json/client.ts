@@ -1,7 +1,7 @@
 // for start bun --watch client.ts
 // client.ts
 import { GrpcPipeClient, PipeHandler } from '@grpc-pipe/client';
-import { UserProfile } from './data';
+import { UserProfile } from './data.js';
 
 interface ClientSend {
   ping: { message: UserProfile };

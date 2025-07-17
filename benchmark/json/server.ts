@@ -1,6 +1,6 @@
 // for start PORT=50051 bun --watch server.ts
 import { GrpcPipeServer } from '@grpc-pipe/server';
-import { UserProfile } from './data';
+import { UserProfile } from './data.js';
 
 /** Messages the server sends to the client */
 interface ServerSend {
@@ -13,7 +13,7 @@ interface ServerReceive {
 }
 
 const port = parseInt(process.env.PORT || '50051', 10);
-const server = new GrpcPipeServer<ServerSend, ServerReceive>({ port, compression: true });
+const server = new GrpcPipeServer<ServerSend, ServerReceive>({ host: 'localhost', port, compression: true });
 
 // Track connected clients
 const clients = new Set<any>();
