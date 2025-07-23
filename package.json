@@ -22,7 +22,7 @@
     "packages/*"
   ],
   "devDependencies": {
-    "@bufbuild/protobuf": "^2.6.1",
+    "@bufbuild/protobuf": "^2.6.2",
     "@grpc/grpc-js": "^1.13.4",
     "fastq": "^1.19.1",
     "rimraf": "^6.0.1",

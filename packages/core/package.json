@@ -1,6 +1,6 @@
 {
   "name": "@grpc-pipe/core",
-  "version": "0.2.26",
+  "version": "0.2.27",
   "author": "ACO .",
   "license": "MIT",
   "type": "module",
@@ -49,7 +49,7 @@
     "proto:compile": "protoc --ts_proto_out=src --ts_proto_opt=useOptionals=messages,outputServices=grpc-js,importSuffix=.js --proto_path=proto proto/*.proto"
   },
   "dependencies": {
-    "@bufbuild/protobuf": "^2.6.1",
+    "@bufbuild/protobuf": "^2.6.2",
     "@grpc/grpc-js": "^1.13.4",
     "fastq": "^1.19.1"
   },
