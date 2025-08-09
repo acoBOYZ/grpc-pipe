@@ -1,3 +1,4 @@
+// data.ts
 export interface UserProfile {
   id: string;
   username: string;

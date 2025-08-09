@@ -1,48 +1,27 @@
 import type { Transport } from '../transports/Transport.js';
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js';
+import type { PipeHandlerOptions } from './types.js';
+
 import os from 'os';
 import { type queueAsPromised, promise as fastqPromise } from 'fastq';
 import { compress, decompress } from '../utils/compression.js';
+import { dlog } from '../utils/debug.js';
+import { Deque } from './Deque.js';
 
 /**
- * Configuration options for {@link PipeHandler}.
- */
-export interface PipeHandlerOptions {
-  /**
-   * Enables compression for outgoing messages using gzip.
-   * If set to `true`, messages will be compressed before sending.
-   */
-  compression?: boolean;
-
-  /**
-   * Applies backpressure if the transport's write buffer exceeds the given byte size.
-   * Prevents memory overflow by queuing messages when the limit is reached.
-   * 
-   * @default 5 * 1024 * 1024 (5MB)
-   */
-  backpressureThresholdBytes?: number;
-
-  /**
-   * Enables automatic heartbeat messages to ensure connection liveness.
-   *
-   * - If set to `true`, uses the default interval of 5000ms.
-   * - If set to an object, you can customize the interval using `intervalMs`.
-   * - If set to `false` or omitted, heartbeats are disabled.
-   *
-   * @example
-   * heartbeat: { intervalMs: 10000 }
-   */
-  heartbeat?: boolean | { intervalMs?: number };
-}
-
-/**
- * PipeHandler provides a typed abstraction over a duplex {@link Transport},
- * handling schema-based message encoding/decoding, optional gzip compression,
- * asynchronous backpressure-aware posting, and message event dispatching.
+ * PipeHandler provides a typed abstraction over a duplex {@link Transport}.
  *
- * @template SendMap - The shape of messages that can be sent by this handler.
- * @template ReceiveMap - The shape of messages that can be received.
- * @template Context - Optional session context tied to this handler instance.
+ * It manages:
+ * - **Schema-aware serialization** (Protobuf via {@link SchemaRegistry} or JSON fallback)
+ * - **Optional gzip compression** for outbound payloads
+ * - **Backpressure detection** with an internal message queue
+ * - **Application-level in-flight throttling** for request/response flows
+ * - **Async processing queue** for incoming messages
+ * - **Heartbeat messages** for connection liveness
+ *
+ * @template SendMap - Outgoing message types and payload shapes.
+ * @template ReceiveMap - Incoming message types and payload shapes.
+ * @template Context - Optional user-defined context bound to this handler.
  */
 export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
   protected queue: queueAsPromised<{ type: keyof ReceiveMap; data: ReceiveMap[keyof ReceiveMap] }>;
@@ -55,35 +34,54 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
   private readyResolved = false;
 
   private globalListener?: <T extends keyof ReceiveMap>(type: T, data: ReceiveMap[T]) => void;
-  private postQueue: (() => Promise<void>)[] = [];
-  private draining = false;
+  private postQueue = new Deque<() => void>();
 
   private compressionEnabled: boolean;
   private backpressureThresholdBytes: number;
   private heartbeatTimeout?: NodeJS.Timeout;
+  private pumping = false;
+  private maxInFlight?: number;
+  private inFlight = 0;
+  private releaseOn = new Set<string>();
 
   /**
    * Creates a new instance of {@link PipeHandler}.
    *
-   * @param transport - The duplex transport layer used for sending and receiving messages.
-   * @param schema - Optional schema registry for protobuf-based message serialization.
-   * @param options - Configuration options for compression, heartbeat, and backpressure.
-   * @param context - Optional custom context that will be attached to the instance.
+   * @param transport - The underlying duplex transport (e.g., TCP, IPC, WebSocket).
+   * @param schema - Optional {@link SchemaRegistry} for Protobuf-based serialization.
+   * @param options - Configuration flags for compression, backpressure, heartbeat, and in-flight gating.
+   * @param context - Optional application context bound to this instance.
+   *
+   * @example
+   * const handler = new PipeHandler(
+   *   new WebSocketTransport(ws),
+   *   schemaRegistry,
+   *   {
+   *     compression: true,
+   *     backpressureThresholdBytes: 4 * 1024 * 1024,
+   *     heartbeat: { intervalMs: 10_000 },
+   *     maxInFlight: 256,
+   *     releaseOn: ['pong', 'ack']
+   *   },
+   *   { userId: 123 }
+   * );
    */
   constructor(
     protected transport: Transport,
     private schema?: SchemaRegistry<SendMap, ReceiveMap>,
-    options: PipeHandlerOptions = {},
+    options: PipeHandlerOptions<ReceiveMap> = {},
     public readonly context?: Context,
   ) {
     this.context = context ?? ({} as Context);
     this.compressionEnabled = options.compression ?? false;
     this.backpressureThresholdBytes = options.backpressureThresholdBytes ?? 5 * 1024 * 1024;
+    this.maxInFlight = options.maxInFlight;
+    if (options.releaseOn) {
+      for (const t of options.releaseOn) this.releaseOn.add(String(t));
+    }
 
     if (schema) {
-      this.ready = new Promise((resolve) => {
-        this.resolveReady = resolve;
-      });
+      this.ready = new Promise((resolve) => (this.resolveReady = resolve));
       this.useSchema(schema);
     } else {
       this.readyResolved = true;
@@ -91,47 +89,197 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
       this.resolveReady = () => { };
     }
 
-    this.queue = fastqPromise(this, this.process.bind(this), os.cpus().length);
+    this.queue = fastqPromise(this, this.process.bind(this), Math.floor(os.cpus().length / 2));
 
     this.transport.onMessage((message: unknown) => {
       if (this.isValidMessage(message)) {
-        if (typeof message.type === 'string' && message.type.startsWith('system_')) {
-          return;
-        }
+        if (typeof message.type === 'string' && message.type.startsWith('system_')) return;
         this.routeMessage(message);
       } else {
-        console.error('Invalid message received:', message);
+        dlog('pipe:warn', `Invalid message received: ${message}`);
       }
     });
 
     if (options.heartbeat) {
-      const intervalMs =
-        typeof options.heartbeat === 'object'
-          ? options.heartbeat.intervalMs ?? 5000
-          : 5000;
+      const intervalMs = typeof options.heartbeat === 'object'
+        ? options.heartbeat.intervalMs ?? 5000
+        : 5000;
 
       this.heartbeatTimeout = setInterval(() => {
-        this.transport.send({
-          type: 'system_heartbeat',
-          data: new Uint8Array(),
-        });
-
-        if (this.onHeartbeat) {
-          this.onHeartbeat();
-        }
-
-        if (process.env.DEBUG?.includes('pipe:heartbeat')) {
-          console.debug(`[PipeHandler] Sent heartbeat at ${new Date().toISOString()}`);
-        }
+        void this.transport.send({ type: 'system_heartbeat', data: new Uint8Array() });
+        this.onHeartbeat?.();
       }, intervalMs);
     }
   }
 
   /**
-   * Registers a schema registry after construction.
-   * Useful when schema setup is asynchronous or deferred.
+   * Whether this handler has completed its initialization and is ready to send messages.
    *
-   * @param schema - A {@link SchemaRegistry} containing encoders/decoders for all message types.
+   * @remarks
+   * - If a schema is provided, `isReady` becomes `true` only after the schema is registered.
+   * - Useful for delaying posts until serialization is available.
+   */
+  public get isReady() {
+    return this.readyResolved;
+  }
+
+  /**
+   * Returns the serialization mode in use:
+   *
+   * - `'protobuf'` → Using {@link SchemaRegistry} for encoding/decoding.
+   * - `'json'` → Fallback to JSON.stringify / JSON.parse.
+   */
+  public get serialization(): 'protobuf' | 'json' {
+    return this.schema ? 'protobuf' : 'json';
+  }
+
+  /**
+   * Registers a **global listener** invoked for every decoded message
+   * before any type-specific handlers.
+   *
+   * @param listener - `(type, data) => void`
+   */
+  public onAny(listener: (type: keyof ReceiveMap, data: ReceiveMap[keyof ReceiveMap]) => void): void {
+    this.globalListener = listener;
+  }
+
+  /**
+   * Subscribe to a specific message type.
+   *
+   * @param type - Message type to listen for.
+   * @param callback - Handler for that message type.
+   */
+  public on<T extends keyof ReceiveMap>(type: T, callback: (data: ReceiveMap[T]) => void | Promise<void>) {
+    if (!this.callbacks[type]) this.callbacks[type] = [];
+    this.callbacks[type]!.push(callback);
+  }
+
+  /**
+   * Unsubscribe a previously registered handler for a specific type.
+   *
+   * @param type - Message type.
+   * @param callback - Exact function reference to remove.
+   */
+  public off<T extends keyof ReceiveMap>(type: T, callback: (data: ReceiveMap[T]) => void | Promise<void>) {
+    const arr = this.callbacks[type];
+    if (!arr) return;
+    const i = arr.indexOf(callback);
+    if (i !== -1) arr.splice(i, 1);
+  }
+
+  /**
+   * Sends a message of the given type and payload.
+   *
+   * - Encodes with Protobuf if a schema is registered, otherwise falls back to JSON.
+   * - Compresses payload with gzip if enabled.
+   * - Respects application-level in-flight gating if `maxInFlight` is set.
+   * - Respects transport-level backpressure if no in-flight limit is set.
+   *
+   * @remarks
+   * - If `maxInFlight` is reached, the message is queued until a `releaseOn` type arrives.
+   * - System messages (`system_*`) bypass in-flight gating.
+   *
+   * @param type - Outgoing message type.
+   * @param data - Outgoing payload.
+   *
+   * @example
+   * handler.post('ping', { id: 123 });
+   */
+  public post<T extends keyof SendMap>(type: T, data: SendMap[T]): void {
+    if (!this.readyResolved) { this.ready.then(() => this.post(type, data)); return; }
+
+    const nonSystem = typeof type === 'string' && !type.startsWith('system_');
+    if (this.maxInFlight && nonSystem && this.inFlight >= this.maxInFlight) {
+      const task = () => this._sendNow(type, data);
+      this.postQueue.push(task);
+      if (!this.pumping) this.schedulePump();
+      return;
+    }
+
+    this._sendNow(type, data);
+
+    if (this.isPressured() && this.postQueue.length > 0 && !this.pumping) this.schedulePump();
+  }
+
+  /**
+   * Encodes (and optionally compresses) then sends the message immediately.
+   *
+   * @internal
+   * @remarks
+   * - If `maxInFlight` is configured and the message is **non-system**, this
+   *   increments `inFlight` **before** attempting to send.
+   * - Compression is performed asynchronously; we don't block the caller and
+   *   send the compressed payload when ready.
+   * - On synchronous send failure, in-flight count is rolled back.
+   *
+   * @param type - Outgoing message type (string keys supported).
+   * @param data - Outgoing payload (protobuf/JSON).
+   */
+  private _sendNow<T extends keyof SendMap>(type: T, data: SendMap[T]) {
+    const nonSystem = typeof type === 'string' && !type.startsWith('system_');
+    if (this.maxInFlight && nonSystem) this.inFlight++;
+
+    try {
+      let payload = this.schema
+        ? this.schema.send[type].encode(data).finish()
+        : Buffer.from(JSON.stringify(data));
+
+      if (this.compressionEnabled) {
+        compress(payload).then((pz) => this.transport.send({ type: String(type), data: pz }));
+        return;
+      }
+      this.transport.send({ type: String(type), data: payload });
+    } catch {
+      if (this.maxInFlight && nonSystem) this.inFlight = Math.max(0, this.inFlight - 1);
+    }
+  }
+
+
+  /**
+   * Optional hook fired every time a heartbeat message is sent.
+   */
+  public onHeartbeat?: () => void;
+
+  /**
+   * Whether the transport is currently experiencing backpressure.
+   *
+   * @remarks
+   * This reflects transport-level buffering — independent of `maxInFlight`.
+   */
+  public get isBackpressured(): boolean {
+    return this.isPressured();
+  }
+
+  /**
+   * Stops automatic heartbeat messages.
+   *
+   * @remarks
+   * Call this when shutting down or intentionally closing a connection.
+   */
+  public destroyHeartBeat() {
+    if (this.heartbeatTimeout) clearInterval(this.heartbeatTimeout);
+  }
+
+  /**
+   * Fully destroys the handler:
+   * - Stops heartbeat
+   * - Clears message queues
+   * - Removes all listeners
+   */
+  public destroy(): void {
+    this.destroyHeartBeat();
+    this.callbacks = {};
+    this.postQueue.kill();
+    this.queue.kill?.();
+  }
+
+  /**
+   * Registers the provided schema and resolves the handler's readiness.
+   *
+   * @internal
+   * @remarks
+   * - Called once during construction when a schema is passed.
+   * - Resolves the internal `ready` promise so `post()` can encode using protobuf.
    */
   private useSchema(schema: SchemaRegistry<SendMap, ReceiveMap>) {
     this.schema = schema;
@@ -141,204 +289,161 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
     }
   }
 
-  /** Indicates whether the handler is ready. */
-  public get isReady() {
-    return this.readyResolved;
-  }
-
   /**
-   * Indicates the serialization format currently in use.
+   * Kicks off the self-pump loop for the outbound queue (`postQueue`).
    *
-   * - `'protobuf'`: A schema has been registered via `useSchema()` or constructor.
-   * - `'json'`: Fallback mode using plain JSON encoding/decoding.
+   * @internal
+   * @remarks
+   * - Ensures only one pump is active at a time via `this.pumping`.
+   * - Schedules ticks with `setImmediate` to avoid starving the event loop.
+   * - Does **not** rely on stream `'drain'`; pump policy is decided in `pumpOnce()`.
    */
-  public get serialization(): 'protobuf' | 'json' {
-    return this.schema ? 'protobuf' : 'json';
-  }
-
-  public onAny(listener: (type: keyof ReceiveMap, data: ReceiveMap[keyof ReceiveMap]) => void): void {
-    this.globalListener = listener;
-  }
-
-  /**
-   * Subscribes to messages of a specific type.
-   * Multiple callbacks may be registered for a given type.
-   *
-   * @param type - The message type key to listen for.
-   * @param callback - Function to handle the decoded message data.
-   */
-  public on<T extends keyof ReceiveMap>(type: T, callback: (data: ReceiveMap[T]) => void | Promise<void>) {
-    if (!this.callbacks[type]) {
-      this.callbacks[type] = [];
-    }
-    this.callbacks[type]!.push(callback);
-  }
-
-  /**
-   * Unsubscribes a specific callback from a message type.
-   *
-   * @param type - The message type.
-   * @param callback - The handler function to remove.
-   */
-  public off<T extends keyof ReceiveMap>(type: T, callback: (data: ReceiveMap[T]) => void | Promise<void>) {
-    const handlers = this.callbacks[type];
-    if (handlers) {
-      const index = handlers.indexOf(callback);
-      if (index !== -1) handlers.splice(index, 1);
-    }
-  }
-
-  /**
-   * Sends a message of the given type with the provided payload.
-   *
-   * - Applies compression if enabled.
-   * - Uses schema encoding if available.
-   * - Applies backpressure when write buffer exceeds threshold.
-   *
-   * @param type - The message type key.
-   * @param data - The payload to send for the message type.
-   */
-  public async post<T extends keyof SendMap>(type: T, data: SendMap[T]) {
-    await this.ready;
-
-    const task = async () => {
-      let payload = this.schema
-        ? this.schema.send[type].encode(data).finish()
-        : Buffer.from(JSON.stringify(data));
-
-      if (this.compressionEnabled) {
-        payload = await compress(payload);
-      }
-
-      this.transport.send({ type, data: payload });
-    };
-
-    if (this.getPendingBytes() >= this.backpressureThresholdBytes) {
-      await new Promise<void>((resolve) => {
-        this.postQueue.push(async () => {
-          await task();
-          resolve();
-        });
+  private schedulePump() {
+    if (this.pumping) return;
+    this.pumping = true;
+    const tick = () => {
+      this.pumpOnce().finally(() => {
+        if (this.postQueue.length > 0) {
+          setImmediate(tick);
+        } else {
+          this.pumping = false;
+        }
       });
-    } else {
-      await task();
-    }
+    };
+    setImmediate(tick);
   }
 
   /**
-   * Optional hook invoked every time a heartbeat is sent.
-   * Can be used to log or trigger custom behavior.
-   */
-  public onHeartbeat?: () => void;
-
-  /** Returns true if transport is under backpressure */
-  public get isBackpressured(): boolean {
-    return this.getPendingBytes() >= this.backpressureThresholdBytes;
-  }
-
-  /**
-   * Stops the automatic heartbeat mechanism (if active).
-   * Use this when tearing down a connection intentionally.
-   */
-  public destroyHeartBeat() {
-    if (this.heartbeatTimeout) {
-      clearInterval(this.heartbeatTimeout);
-    }
-  }
-
-  /**
-   * Fully cleans up internal state: stops heartbeat, clears queues, detaches listeners.
-   * Should be called on disconnect or shutdown.
-   */
-  public destroy(): void {
-    this.destroyHeartBeat();
-    this.callbacks = {};
-    this.postQueue.length = 0;
-    this.queue.kill?.();
-  }
-
-  /**
-   * Routes an incoming raw message to the correct handler(s).
-   * Also drains the post-send backpressure queue if needed.
+   * Attempts to flush queued outbound tasks under current gating rules.
    *
-   * @param message - An object containing a `type` and raw `data`.
+   * @internal
+   * @remarks
+   * Flush conditions (loop continues while all are satisfied):
+   *  1) There is at least one queued task (`postQueue.length > 0`)
+   *  2) If an app window is set (`maxInFlight`), we have available slots
+   *     (`inFlight < maxInFlight`)
+   *  3) If NO app window is set, transport is not pressure-signaled
+   *     (`!isPressured()`). With `maxInFlight` set, transport pressure is ignored
+   *     so we rely purely on app-level gating.
+   *
+   * The queue holds **thunks** (no args) that perform: encode → (optional) compress → send.
+   * Any synchronous error in a task simply breaks the flush loop to avoid tight retry.
+   */
+  private async pumpOnce() {
+    while (this.postQueue.length > 0) {
+      if (this.maxInFlight && this.inFlight >= this.maxInFlight) break;
+      if (!this.maxInFlight && this.isPressured()) break;
+
+      const next = this.postQueue.shift();
+      if (!next) break;
+      try { next(); } catch { break; }
+    }
+  }
+
+  /**
+   * Routes an incoming raw message (type, binary payload) into the decode path.
+   *
+   * @internal
+   * @remarks
+   * - Skips scheduling if nothing is queued; otherwise re-arms the pump so
+   *   responses can release in-flight slots and allow queued posts to proceed.
+   * - Delegates actual decode + dispatch to {@link emit}.
    */
   protected async routeMessage(message: { type: keyof ReceiveMap; data: any }) {
     this.emit(message.type, message.data);
 
-    if (!this.draining && this.postQueue.length > 0) {
-      this.draining = true;
-      while (this.postQueue.length > 0 && this.isBackpressured) {
-        const next = this.postQueue.shift();
-        if (next) {
-          await next();
-        }
-      }
-      this.draining = false;
+    if (this.postQueue.length > 0 && !this.pumping) {
+      this.schedulePump();
     }
   }
 
   /**
-   * Decodes, decompresses (if enabled), and dispatches a message to registered listeners.
+   * Decodes an incoming payload, invokes global and per-type handlers,
+   * and manages in-flight release.
    *
-   * @param type - The message type.
-   * @param payload - Raw binary data received from transport.
+   * @internal
+   * @remarks
+   * - If compression is enabled, the payload is decompressed first.
+   * - If a schema exists, uses it to decode; otherwise falls back to JSON.parse.
+   * - If `maxInFlight` is configured and the message type appears in `releaseOn`,
+   *   this decrements the `inFlight` counter and (if backlog exists) tries to
+   *   resume the pump.
+   *
+   * @param type - Decoded message type.
+   * @param payload - Raw binary payload (Uint8Array/Buffer-like).
    */
   protected emit<T extends keyof ReceiveMap>(type: T, payload: any) {
-    let data: ReceiveMap[T];
-    let raw = payload;
+    let raw = this.compressionEnabled ? decompress(payload) : payload;
 
-    if (this.compressionEnabled) {
-      raw = decompress(payload);
+    let data: ReceiveMap[T];
+    if (this.schema) {
+      const entry = this.schema.receive[type];
+      if (!entry) {
+        dlog('pipe:schema', `missing schema.receive for "${String(type)}" (drop)`);
+        return;
+      }
+      data = entry.decode(raw);
+    } else {
+      // data = JSON.parse(Buffer.isBuffer(raw) ? raw.toString() : Buffer.from(raw).toString());
+      const asBuf = (raw instanceof Uint8Array) ? Buffer.from(raw) : raw;
+      data = JSON.parse(Buffer.isBuffer(asBuf) ? asBuf.toString() : String(asBuf));
     }
 
-    data = this.schema
-      ? this.schema.receive[type].decode(raw)
-      : JSON.parse(raw.toString());
-
     this.globalListener?.(type, data);
+    if (this.maxInFlight && this.releaseOn.has(String(type))) {
+      this.inFlight = Math.max(0, this.inFlight - 1);
+      if (this.postQueue.length > 0 && !this.pumping) this.schedulePump();
+    }
     this.queue.push({ type, data });
   }
 
   /**
-   * Internal fastq task that executes all handlers for a given message.
+   * Processes a decoded message by invoking all registered handlers for that type.
    *
-   * @param message - The fully decoded message with type and data.
+   * @internal
+   * @remarks
+   * - Handlers may be `async`; they are awaited in registration order.
+   * - Failures in a handler do not stop other handlers for the same type.
+   *
+   * @param param0 - Object with `type` and decoded `data`.
    */
   private async process({ type, data }: { type: keyof ReceiveMap; data: ReceiveMap[keyof ReceiveMap] }) {
     const handlers = this.callbacks[type];
-    if (handlers) {
-      for (const handler of handlers) {
-        await handler(data);
-      }
-    }
+    if (!handlers) return;
+
+    for (const handler of handlers)
+      await handler(data);
   }
 
   /**
-   * Returns the number of bytes buffered for writing on the underlying stream.
-   * Used for applying backpressure when needed.
+   * Returns the current number of bytes pending in the underlying transport’s write buffer.
+   *
+   * @internal
+   * @remarks
+   * - Uses `transport.getWritableInfo()` if available.
+   * - When unavailable, returns 0 so backpressure decisions fall back to in-flight rules.
    */
   private getPendingBytes(): number {
-    const stream = (this.transport as any).stream;
-    if (stream && typeof stream.writableLength === 'number') {
-      return stream.writableLength;
-    }
-    return 0;
+    const info = this.transport.getWritableInfo?.();
+    return info?.writableLength ?? 0;
   }
 
   /**
-   * Validates the structure of an incoming message object.
-   * Ensures it contains both `type` and `data` keys.
+   * Indicates whether the transport layer reports backpressure.
    *
-   * @param message - The unknown object to validate.
-   * @returns `true` if the message is structurally valid.
+   * @internal
+   * @remarks
+   * - True when the transport signals `writableNeedDrain` or when the pending
+   *   bytes exceed `backpressureThresholdBytes`.
+   * - Ignored by the pump when `maxInFlight` is set (app-level window takes precedence).
    */
+  private isPressured(): boolean {
+    const info = this.transport.getWritableInfo?.();
+    if (!info) return false;
+    return info.writableNeedDrain || this.getPendingBytes() >= this.backpressureThresholdBytes;
+  }
+
   private isValidMessage(message: unknown): message is { type: keyof ReceiveMap; data: any } {
-    return (
-      typeof message === 'object' &&
-      message !== null &&
-      'type' in message &&
-      'data' in message
-    );
+    return typeof message === 'object' && message !== null && 'type' in message && 'data' in message;
   }
 }

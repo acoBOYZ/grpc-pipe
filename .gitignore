@@ -40,3 +40,4 @@ dist-ssr
 .cmd
 .eslintrc.js
 wa-store
+*.tree

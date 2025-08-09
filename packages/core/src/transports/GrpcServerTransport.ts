@@ -27,10 +27,15 @@ export class GrpcServerTransport implements Transport {
    * @param data - An object containing the message `type` as a string and `data` as a `Uint8Array` payload.
    */
   public send(data: { type: string; data: Uint8Array }): void {
-    this.stream.write({
-      type: data.type,
-      payload: data.data,
-    });
+    if (!data?.type || typeof data.type !== 'string') {
+      throw new Error('GrpcServerTransport.send: Missing or invalid type');
+    }
+    if (!(data.data instanceof Uint8Array)) {
+      throw new Error('GrpcServerTransport.send: Missing or invalid payload Uint8Array');
+    }
+
+    // ❗ Synchronous write; do NOT attach 'drain' here.
+    this.stream.write({ type: data.type, payload: data.data });
   }
 
   /**
@@ -40,10 +45,19 @@ export class GrpcServerTransport implements Transport {
    */
   public onMessage(callback: (data: { type: string; data: Uint8Array }) => void): void {
     this.stream.on('data', (pipeMessage: PipeMessage) => {
-      callback({
-        type: pipeMessage.type,
-        data: pipeMessage.payload,
-      });
+      callback({ type: pipeMessage.type, data: pipeMessage.payload });
     });
+  }
+
+  public onDrain(cb: () => void) {
+    this.stream.once?.('drain', cb);
+  }
+
+  public getWritableInfo() {
+    const s = this.stream;
+    return {
+      writableLength: typeof s.writableLength === 'number' ? s.writableLength : 0,
+      writableNeedDrain: !!s.writableNeedDrain,
+    };
   }
 }

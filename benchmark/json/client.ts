@@ -21,7 +21,7 @@ const connections = new Map<string, PipeHandler<ClientSend, ClientReceive>>();
 const pending = new Map<string, number>();
 const latencies: number[] = [];
 
-const messagesPerClient = 1000;
+const messagesPerClient = 33_333;
 const totalMessagesToSend = messagesPerClient * serverAddresses.length;
 
 let totalReceived = 0;
@@ -34,7 +34,16 @@ function connectToServer(address: string) {
   const client = new GrpcPipeClient<ClientSend, ClientReceive>({
     address,
     reconnectDelayMs: 2000,
-    compression: true
+    compression: false,
+    maxInFlight: 128,
+    releaseOn: ['pong'],
+    channelOptions: {
+      'grpc.keepalive_time_ms': 25_000,      // >= server min_time_between_pings
+      'grpc.keepalive_timeout_ms': 10_000,
+      'grpc.keepalive_permit_without_calls': 1,
+      'grpc.http2.min_time_between_pings_ms': 20_000,
+      'grpc.http2.max_pings_without_data': 0,
+    },
   });
 
   client.on('connected', (pipe: PipeHandler<ClientSend, ClientReceive>) => {
@@ -70,18 +79,11 @@ function connectToServer(address: string) {
 }
 
 function startSending(address: string, pipe: PipeHandler<ClientSend, ClientReceive>) {
-  let sent = 0;
-  const interval = setInterval(() => {
-    if (sent >= messagesPerClient) {
-      clearInterval(interval);
-      return;
-    }
-
+  for (let sent = 0; sent < messagesPerClient; sent++) {
     const id = `${address}-${sent}`;
     pending.set(id, nowMs());
     pipe.post('ping', { message: generateBigPayload(id) });
-    sent++;
-  }, 0);
+  }
 }
 
 function printResults() {

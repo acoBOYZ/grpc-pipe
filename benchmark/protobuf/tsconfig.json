@@ -1,12 +1,11 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "types": ["bun"],
-    "esModuleInterop": true,
-    "skipLibCheck": true
+    "rootDir": "src",
+    "outDir": "dist",
+    "declaration": false,
+    "emitDeclarationOnly": false,
+    "removeComments": true,
   },
-  "include": ["src", "./client.ts", "./server.ts"]
+  "include": ["src", "connection"]
 }

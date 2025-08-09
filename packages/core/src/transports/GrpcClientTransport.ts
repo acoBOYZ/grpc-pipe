@@ -32,7 +32,7 @@ export class GrpcClientTransport implements Transport {
    *   - `data`: The binary payload as a `Uint8Array`.
    * @throws Will throw an error if the `type` is missing/invalid or if `data` is not a `Uint8Array`.
    */
-  public send(data: { type: string; data: Uint8Array }): void {    
+  public send(data: { type: string; data: Uint8Array }): void {
     if (!data.type || typeof data.type !== 'string') {
       throw new Error('GrpcClientTransport.send: Missing or invalid type');
     }
@@ -40,10 +40,12 @@ export class GrpcClientTransport implements Transport {
       throw new Error('GrpcClientTransport.send: Missing or invalid payload Uint8Array');
     }
 
-    this.stream.write({
-      type: data.type,
-      payload: data.data,
-    });
+    // ❗ Synchronous write; do NOT attach 'drain' here.
+    this.stream.write({ type: data.type, payload: data.data });
+  }
+
+  public onDrain(cb: () => void) {
+    this.stream.once?.('drain', cb);
   }
 
   /**
@@ -60,5 +62,13 @@ export class GrpcClientTransport implements Transport {
         data: pipeMessage.payload,
       });
     });
+  }
+
+  public getWritableInfo() {
+    const s = this.stream;
+    return {
+      writableLength: typeof s.writableLength === 'number' ? s.writableLength : 0,
+      writableNeedDrain: !!s.writableNeedDrain,
+    };
   }
 }

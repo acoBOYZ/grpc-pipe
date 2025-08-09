@@ -1,7 +1,8 @@
 // for start bun --watch client.ts
+// client.ts
 import type { InferSend, InferReceive } from '@grpc-pipe/client';
 import { GrpcPipeClient, PipeHandler } from '@grpc-pipe/client';
-import { benchmarkClientRegistry } from './src/schema';
+import { benchmarkClientRegistry } from './src/schema.js';
 
 type ClientSend = InferSend<typeof benchmarkClientRegistry>;
 type ClientReceive = InferReceive<typeof benchmarkClientRegistry>;
@@ -16,10 +17,11 @@ const connections = new Map<string, PipeHandler<ClientSend, ClientReceive>>();
 const pending = new Map<string, number>();
 const latencies: number[] = [];
 
-const messagesPerClient = 3_333;
+const messagesPerClient = 33_333;
 const totalMessagesToSend = messagesPerClient * serverAddresses.length;
 
 let totalReceived = 0;
+let startMs: number | null = null;
 
 function nowMs() {
   return Date.now();
@@ -28,17 +30,21 @@ function nowMs() {
 function connectToServer(address: string) {
   const client = new GrpcPipeClient<ClientSend, ClientReceive>({
     address,
-    // schema: benchmarkClientRegistry,
+    schema: benchmarkClientRegistry,
     reconnectDelayMs: 2000,
     compression: false,
+    maxInFlight: 128,
+    releaseOn: ['pong'],
     channelOptions: {
-      'grpc.keepalive_time_ms': 10_000,
-      'grpc.keepalive_timeout_ms': 5_000,
+      'grpc.keepalive_time_ms': 25_000,      // >= server min_time_between_pings
+      'grpc.keepalive_timeout_ms': 10_000,
       'grpc.keepalive_permit_without_calls': 1,
+      'grpc.http2.min_time_between_pings_ms': 20_000,
+      'grpc.http2.max_pings_without_data': 0,
     },
     metadata: {
-      clientId: 'client_xxx:123'
-    }
+      clientId: 'client_ts:123'
+    },
   });
 
   client.on('connected', (pipe: PipeHandler<ClientSend, ClientReceive>) => {
@@ -75,18 +81,13 @@ function connectToServer(address: string) {
 }
 
 function startSending(address: string, pipe: PipeHandler<ClientSend, ClientReceive>) {
-  let sent = 0;
-  const interval = setInterval(() => {
-    if (sent >= messagesPerClient) {
-      clearInterval(interval);
-      return;
-    }
+  if (startMs === null) startMs = nowMs();
 
-    const fakeUserProfile = generateBigPayload(`${address}-${sent}`);
-    pending.set(fakeUserProfile.id, nowMs());
-    pipe.post('ping', { message: fakeUserProfile });
-    sent++;
-  }, 0);
+  for (let sent = 0; sent < messagesPerClient; sent++) {
+    const id = `${address}-${sent}`;
+    pending.set(id, nowMs());
+    pipe.post('ping', { message: generateBigPayload(id) });
+  }
 }
 
 function printResults() {
@@ -100,11 +101,15 @@ function printResults() {
   const max = Math.max(...latencies);
   const avg = latencies.reduce((a, b) => a + b, 0) / latencies.length;
 
+  const elapsedSec = (nowMs() - startMs!) / 1000;
+  const throughput = elapsedSec > 0 ? totalMessagesToSend / elapsedSec : 0;
+
   console.log(`Messages sent: ${totalMessagesToSend}`);
   console.log(`Messages received: ${latencies.length}`);
   console.log(`Min latency: ${min} ms`);
   console.log(`Avg latency: ${avg.toFixed(2)} ms`);
   console.log(`Max latency: ${max} ms`);
+  console.log(`Throughput: ${throughput.toFixed(0)} msg/s`);
 }
 
 for (const address of serverAddresses) {
@@ -112,34 +117,38 @@ for (const address of serverAddresses) {
 }
 
 // --- Helper: fake UserProfile generator
-import { UserProfile } from '../json/data';
+import { UserProfile } from '../json/data.js';
+
+const staticUserPayload: Omit<UserProfile, 'id'> = {
+  username: `user_name`,
+  email: `user@example.com`,
+  bio: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+  settings: {
+    theme: Math.random() > 0.5 ? "light" : "dark",
+    notifications: {
+      email: true,
+      sms: false,
+      push: true,
+    },
+  },
+  stats: {
+    posts: Math.floor(Math.random() * 1000),
+    followers: Math.floor(Math.random() * 10000),
+    following: Math.floor(Math.random() * 500),
+    createdAt: new Date().toISOString(),
+  },
+  posts: Array.from({ length: 10 }, (_, i) => ({
+    id: `post-${i}`,
+    title: `Post Title ${i}`,
+    content: "Content here...".repeat(50),
+    likes: Math.floor(Math.random() * 500),
+    tags: ["benchmark", "test", "data"],
+  })),
+}
 
 function generateBigPayload(id: string): UserProfile {
   return {
+    ...staticUserPayload,
     id,
-    username: `user_${id}`,
-    email: `user${id}@example.com`,
-    bio: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
-    settings: {
-      theme: Math.random() > 0.5 ? "light" : "dark",
-      notifications: {
-        email: true,
-        sms: false,
-        push: true,
-      },
-    },
-    stats: {
-      posts: Math.floor(Math.random() * 1000),
-      followers: Math.floor(Math.random() * 10000),
-      following: Math.floor(Math.random() * 500),
-      createdAt: new Date().toISOString(),
-    },
-    posts: Array.from({ length: 10 }, (_, i) => ({
-      id: `${id}-${i}`,
-      title: `Post Title ${i}`,
-      content: "Content here...".repeat(50),
-      likes: Math.floor(Math.random() * 500),
-      tags: ["benchmark", "test", "data"],
-    })),
   };
 }

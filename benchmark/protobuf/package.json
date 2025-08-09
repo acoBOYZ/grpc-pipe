@@ -8,9 +8,5 @@
     "server:1": "PORT=50061 bun --watch server.ts",
     "server:2": "PORT=50062 bun --watch server.ts",
     "server:3": "PORT=50063 bun --watch server.ts"
-  },
-  "dependencies": {
-    "@grpc-pipe/server": "workspace:*",
-    "@grpc-pipe/client": "workspace:*"
   }
 }
