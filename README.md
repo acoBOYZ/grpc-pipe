@@ -247,9 +247,11 @@ client.on('error', (err) => ...);
 
 ## Interop with Go
 
-- TS ↔ TS, TS ↔ Go, Go ↔ Go all work the same way.
+✅ TS ↔ TS  
+✅ Go ↔ TS  
+✅ Go ↔ Go  
+
 - Go repo: https://github.com/acoBOYZ/grpc-pipe-go  
-- TS repo (this): https://github.com/acoBOYZ/grpc-pipe
 
 ---
 
