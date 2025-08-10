@@ -173,7 +173,7 @@ server.on('connection', (pipe) => {
 
 server.on('error', (err) => ...);
 
-/* GRPC SERVER */
+/* GRPC CLIENT */
 // client types
 interface ClientSend {
   ping: { message: UserProfile };
@@ -253,7 +253,7 @@ client.on('error', (err) => ...);
 
 ---
 
-## Benchmarks
+## Benchmarks (100k msgs, ~9 KB JSON payload)
 
 ### 3 TS servers → 1 TS client (protobuf no compress)
 ```
