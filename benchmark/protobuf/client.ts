@@ -32,7 +32,7 @@ function connectToServer(address: string) {
     address,
     schema: benchmarkClientRegistry,
     reconnectDelayMs: 2000,
-    compression: false,
+    compression: { codec: 'gzip' },
     maxInFlight: 128,
     releaseOn: ['pong'],
     channelOptions: {

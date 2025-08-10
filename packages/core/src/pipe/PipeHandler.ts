@@ -4,7 +4,7 @@ import type { PipeHandlerOptions } from './types.js';
 
 import os from 'os';
 import { type queueAsPromised, promise as fastqPromise } from 'fastq';
-import { compress, decompress } from '../utils/compression.js';
+import { type CompressionSetting, compress, decompress } from '../utils/compression.js';
 import { dlog } from '../utils/debug.js';
 import { Deque } from './Deque.js';
 
@@ -36,7 +36,7 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
   private globalListener?: <T extends keyof ReceiveMap>(type: T, data: ReceiveMap[T]) => void;
   private postQueue = new Deque<() => void>();
 
-  private compressionEnabled: boolean;
+  private compressionSetting?: CompressionSetting;
   private backpressureThresholdBytes: number;
   private heartbeatTimeout?: NodeJS.Timeout;
   private pumping = false;
@@ -73,7 +73,7 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
     public readonly context?: Context,
   ) {
     this.context = context ?? ({} as Context);
-    this.compressionEnabled = options.compression ?? false;
+    this.compressionSetting = options.compression ?? false;
     this.backpressureThresholdBytes = options.backpressureThresholdBytes ?? 5 * 1024 * 1024;
     this.maxInFlight = options.maxInFlight;
     if (options.releaseOn) {
@@ -224,8 +224,11 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
         ? this.schema.send[type].encode(data).finish()
         : Buffer.from(JSON.stringify(data));
 
-      if (this.compressionEnabled) {
-        compress(payload).then((pz) => this.transport.send({ type: String(type), data: pz }));
+      const cs = this.compressionSetting;
+      if (cs) {
+        compress(payload, cs).then((pz) =>
+          this.transport.send({ type: String(type), data: pz })
+        );
         return;
       }
       this.transport.send({ type: String(type), data: payload });
@@ -373,7 +376,8 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
    * @param payload - Raw binary payload (Uint8Array/Buffer-like).
    */
   protected emit<T extends keyof ReceiveMap>(type: T, payload: any) {
-    let raw = this.compressionEnabled ? decompress(payload) : payload;
+    const cs = this.compressionSetting;
+    const raw = cs ? decompress(payload, cs) : payload;
 
     let data: ReceiveMap[T];
     if (this.schema) {

@@ -34,10 +34,6 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
   private currentReconnectDelay: number;
   private readonly maxReconnectDelay = 30_000;
 
-  private readonly compression: boolean;
-  private readonly backpressureThresholdBytes: number;
-  private readonly heartbeat: boolean | { intervalMs?: number };
-
   private connected = false;
   private isReconnecting = false;
 
@@ -65,9 +61,6 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
     super();
     this.reconnectBaseDelay = options.reconnectDelayMs ?? 2_000;
     this.currentReconnectDelay = this.reconnectBaseDelay;
-    this.compression = options.compression ?? false;
-    this.backpressureThresholdBytes = options.backpressureThresholdBytes ?? 5 * 1024 * 1024;
-    this.heartbeat = options.heartbeat ?? false;
     this.connect();
   }
 
@@ -134,13 +127,11 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
 
     let pipe: PipeHandler<SendMap, ReceiveMap>;
     try {
-      pipe = new PipeHandler<SendMap, ReceiveMap>(transport, this.options.schema, {
-        compression: this.compression,
-        backpressureThresholdBytes: this.backpressureThresholdBytes,
-        heartbeat: this.heartbeat,
-        maxInFlight: this.options.maxInFlight,
-        releaseOn: this.options.releaseOn
-      });
+      pipe = new PipeHandler<SendMap, ReceiveMap>(
+        transport,
+        this.options.schema,
+        this.options
+      );
     } catch (err) {
       this.stream.destroy(err instanceof Error ? err : new Error('Pipe init failed'));
       return;

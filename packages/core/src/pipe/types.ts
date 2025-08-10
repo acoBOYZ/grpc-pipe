@@ -1,14 +1,16 @@
+import type { CompressionSetting } from "../utils/compression.js";
+
 /**
  * Configuration options for {@link PipeHandler}.
  */
 export interface PipeHandlerOptions<ReceiveMap> {
   /**
-   * Enables gzip compression for outgoing payloads.
-   * When true, payloads are compressed before being written to the transport.
-   *
-   * @default false
+   * Compression:
+   *  - false (default)           → disabled
+   *  - true                      → gzip
+   *  - { codec: 'gzip'|'snappy'} → explicit object form
    */
-  compression?: boolean;
+  compression?: CompressionSetting;
 
   /**
    * Transport-level backpressure guard. If the underlying stream reports

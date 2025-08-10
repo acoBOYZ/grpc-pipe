@@ -27,9 +27,6 @@ import {
 export class GrpcPipeServer<SendMap, ReceiveMap, Ctx extends object = {}> extends TypedEventEmitter<GrpcPipeServerEvents<SendMap, ReceiveMap, Ctx>> {
   private static instance?: GrpcPipeServer<any, any, {}>;
   private server: Server;
-  private compression: boolean;
-  private backpressureThresholdBytes: number;
-  private readonly heartbeat: boolean | { intervalMs?: number };
 
   private streams = new Map<ServerDuplexStream<com.PipeMessage, com.PipeMessage>, PipeHandler<SendMap, ReceiveMap, Ctx>>();
 
@@ -57,10 +54,6 @@ export class GrpcPipeServer<SendMap, ReceiveMap, Ctx extends object = {}> extend
 
     GrpcPipeServer.instance = this;
     this.server = new Server(this.options.serverOptions);
-
-    this.compression = options.compression ?? false;
-    this.backpressureThresholdBytes = options.backpressureThresholdBytes ?? 5 * 1024 * 1024;
-    this.heartbeat = options.heartbeat ?? true;
 
     this.server.addService(com.PipeServiceService, {
       communicate: async (stream: ServerDuplexStream<com.PipeMessage, com.PipeMessage>) => {
@@ -94,13 +87,12 @@ export class GrpcPipeServer<SendMap, ReceiveMap, Ctx extends object = {}> extend
 
         let pipe: PipeHandler<SendMap, ReceiveMap, Ctx>;
         try {
-          pipe = new PipeHandler<SendMap, ReceiveMap, Ctx>(transport, this.options.schema, {
-            compression: this.compression,
-            backpressureThresholdBytes: this.backpressureThresholdBytes,
-            heartbeat: this.heartbeat,
-            maxInFlight: this.options.maxInFlight,
-            releaseOn: this.options.releaseOn
-          }, context);
+          pipe = new PipeHandler<SendMap, ReceiveMap, Ctx>(
+            transport,
+            this.options.schema,
+            this.options,
+            context
+          );
         } catch (err) {
           stream.destroy(err instanceof Error ? err : new Error('Pipe init failed'));
           return;

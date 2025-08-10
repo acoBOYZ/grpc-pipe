@@ -34,7 +34,7 @@ function connectToServer(address: string) {
   const client = new GrpcPipeClient<ClientSend, ClientReceive>({
     address,
     reconnectDelayMs: 2000,
-    compression: false,
+    compression: { codec: 'snappy' },
     maxInFlight: 128,
     releaseOn: ['pong'],
     channelOptions: {

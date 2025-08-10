@@ -17,7 +17,7 @@ const port = parseInt(process.env.PORT || '50051', 10);
 const server = new GrpcPipeServer<ServerSend, ServerReceive>({
   host: 'localhost',
   port,
-  compression: false,
+  compression: { codec: 'snappy' },
   maxInFlight: 128,
   releaseOn: ['ping'],
   serverOptions: {

@@ -5,7 +5,7 @@
 
 - ✨ JSON fallback (no schema required)
 - 🚀 Protobuf support (zero-copy encode/decode)
-- 📦 Built-in gzip compression (opt-in)
+- 📦 Built-in gzip/snappy compression (opt-in)
 - 🧠 Smart backpressure + optional app-level in-flight window
 - 🔄 Auto-reconnect with exponential backoff
 - ⚡ Fastq-based concurrent dispatch
@@ -33,18 +33,12 @@ Below uses a schema registry for **type-safe** encode/decode. If you skip `schem
 ```ts
 import { GrpcPipeServer } from '@grpc-pipe/core';
 
-// message contracts (server perspective: what it SENDS and RECEIVES)
-interface ServerSend {
-  pong: { message: string };
-}
-interface ServerReceive {
-  ping: { message: string };
-}
+interface ServerSend { pong: { message: string } }
+interface ServerReceive { ping: { message: string } }
 
-// OPTIONAL: supply a schema registry for protobuf
 // import { createSchemaRegistry } from '@grpc-pipe/core';
 // import { Ping, Pong } from './gen/your_pb.js';
-// const benchmarkServerRegistry = createSchemaRegistry<ServerSend, ServerReceive>({
+// const registry = createSchemaRegistry<ServerSend, ServerReceive>({
 //   send:   { pong: Pong },
 //   receive:{ ping: Ping },
 // });
@@ -54,47 +48,30 @@ type ServerContext = { clientId?: string };
 const server = new GrpcPipeServer<ServerSend, ServerReceive, ServerContext>({
   host: '0.0.0.0',
   port: 50061,
-
-  // schema: benchmarkServerRegistry,   // ← enable for protobuf
-  compression: false,
-
-  // App-level in-flight window (throttles posts until 'releaseOn' arrives)
+  // schema: registry,
+  compression: 'snappy', // 'gzip' | 'snappy' | false
   maxInFlight: 128,
-  releaseOn: ['ping'], // when a 'ping' arrives (server side), it releases one slot
-
-  // Low-level gRPC server/channel tuning (grpc-js arg keys)
+  releaseOn: ['ping'],
   serverOptions: {
-    // Keepalive (relaxed; plays nice with TS/Go)
     'grpc.keepalive_time_ms': 25_000,
     'grpc.keepalive_timeout_ms': 10_000,
     'grpc.keepalive_permit_without_calls': 1,
-
-    // HTTP/2 ping policy
     'grpc.http2.min_time_between_pings_ms': 20_000,
     'grpc.http2.max_pings_without_data': 0,
-
-    // Big payloads
     'grpc.max_send_message_length': 64 * 1024 * 1024,
     'grpc.max_receive_message_length': 64 * 1024 * 1024,
   },
-
-  // optional server-side hook: read client metadata and build a context object
-  beforeConnect: ({ metadata }) => {
-    return { clientId: String(metadata.get('clientId')) }; // attach to pipe.context
-  },
+  beforeConnect: ({ metadata }) => ({ clientId: String(metadata.get('clientId')) }),
 });
 
 server.on('connection', (pipe) => {
-  console.log('[SERVER] client connected', pipe.context); // { clientId: 'client_ts:123' } if provided
-
+  console.log('[SERVER] client connected', pipe.context);
   pipe.on('ping', (data) => {
     pipe.post('pong', { message: data.message });
   });
 });
 
-server.on('error', (err) => {
-  console.error('[SERVER] error:', err);
-});
+server.on('error', console.error);
 ```
 
 ### Client
@@ -102,33 +79,23 @@ server.on('error', (err) => {
 ```ts
 import { GrpcPipeClient } from '@grpc-pipe/core';
 
-// message contracts (client perspective)
-interface ClientSend {  ping: { message: string } }
+interface ClientSend { ping: { message: string } }
 interface ClientReceive { pong: { message: string } }
 
-// OPTIONAL: enable protobuf via registry
 // import { createSchemaRegistry } from '@grpc-pipe/core';
 // import { Ping, Pong } from './gen/your_pb.js';
-// const benchmarkClientRegistry = createSchemaRegistry<ClientSend, ClientReceive>({
+// const registry = createSchemaRegistry<ClientSend, ClientReceive>({
 //   send:   { ping: Ping },
 //   receive:{ pong: Pong },
 // });
 
-const address = 'localhost:50061';
-
 const client = new GrpcPipeClient<ClientSend, ClientReceive>({
-  address,
-  // schema: benchmarkClientRegistry, // ← enable for protobuf
-  compression: false,
-
-  // Auto-reconnect
+  address: 'localhost:50061',
+  // schema: registry,
+  compression: 'snappy', // 'gzip' | 'snappy' | false
   reconnectDelayMs: 2000,
-
-  // App-level in-flight window (don’t spam the server)
   maxInFlight: 128,
   releaseOn: ['pong'],
-
-  // Channel (grpc-js) options
   channelOptions: {
     'grpc.keepalive_time_ms': 25_000,
     'grpc.keepalive_timeout_ms': 10_000,
@@ -138,21 +105,14 @@ const client = new GrpcPipeClient<ClientSend, ClientReceive>({
     'grpc.max_send_message_length': 64 * 1024 * 1024,
     'grpc.max_receive_message_length': 64 * 1024 * 1024,
   },
-
-  // Custom metadata (read by server in `beforeConnect`)
-  metadata: {
-    clientId: 'client_ts:123',
-  },
+  metadata: { clientId: 'client_ts:123' },
 });
 
 client.on('connected', (pipe) => {
   console.log('[CLIENT] connected; serialization:', pipe.serialization);
-
   pipe.on('pong', (data) => {
     console.log('got pong:', data);
   });
-
-  // send something
   pipe.post('ping', { message: 'Hello World!' });
 });
 
@@ -160,26 +120,20 @@ client.on('disconnected', () => {
   console.log('[CLIENT] disconnected (will auto-reconnect)');
 });
 
-client.on('error', (err) => {
-  console.error('[CLIENT] error:', err);
-});
+client.on('error', console.error);
 ```
 
 ---
 
 ## JSON Fallback (no schema)
 
-If you don’t provide `schema`, the pipe uses JSON encode/decode automatically:
-
 ```ts
 const client = new GrpcPipeClient({
   address: 'localhost:50061',
-  // no schema → JSON mode
 });
 
 const server = new GrpcPipeServer({
   port: 50061,
-  // no schema → JSON mode
 });
 ```
 
@@ -187,79 +141,44 @@ const server = new GrpcPipeServer({
 
 ## Full Option Reference
 
-### Client (`GrpcPipeClientOptions<Send, Receive>`)
+**Client** (`GrpcPipeClientOptions<Send, Receive>`)
 
 ```ts
 {
-  /** Target server, e.g. 'localhost:50061' */
   address: string;
-
-  /** Protobuf registry (enables binary mode); omit for JSON fallback */
   schema?: SchemaRegistry<Send, Receive>;
-
-  /** Enable gzip compression for outgoing messages (default: false) */
-  compression?: boolean;
-
-  /** Apply backpressure once underlying writable buffer passes this size (default: 5MB) */
+  compression?: false | { codec: 'gzip' | 'snappy' };
   backpressureThresholdBytes?: number;
-
-  /** Auto-heartbeat (boolean or { intervalMs }) — optional */
   heartbeat?: boolean | { intervalMs?: number };
-
-  /** Reconnect base delay (ms) for exponential backoff (default: 2000) */
   reconnectDelayMs?: number;
-
-  /** Custom metadata sent on connect (read on server via `beforeConnect`) */
   metadata?: Record<string, string>;
-
-  /** TLS settings (optional): true for default creds, or { rootCerts } */
   tls?: boolean | { rootCerts?: Buffer | string };
-
-  /** grpc-js channel options (keepalive, http2/ping, max msg size, etc.) */
   channelOptions?: import('@grpc/grpc-js').ClientOptions;
-
-  /** App-level window: limit number of in-flight posts until specific acks arrive */
-  maxInFlight?: number;              // e.g., 128
-  releaseOn?: (keyof Receive)[];     // e.g., ['pong']
+  maxInFlight?: number;
+  releaseOn?: (keyof Receive)[];
 }
 ```
 
-### Server (`GrpcPipeServerOptions<Send, Receive, Ctx>`)
+**Server** (`GrpcPipeServerOptions<Send, Receive, Ctx>`)
 
 ```ts
 {
-  host?: string;           // default '0.0.0.0'
+  host?: string;
   port: number;
-
-  /** Protobuf registry; omit for JSON fallback */
   schema?: SchemaRegistry<Send, Receive>;
-
-  /** Enable gzip compression for outgoing messages (default: false) */
-  compression?: boolean;
-
-  /** Apply backpressure once underlying writable buffer passes this size (default: 5MB) */
+  compression?: false | { codec: 'gzip' | 'snappy' };
   backpressureThresholdBytes?: number;
-
-  /** Auto-heartbeat (boolean or { intervalMs }) — optional */
   heartbeat?: boolean | { intervalMs?: number };
-
-  /** grpc-js Server options (keepalive/http2/max sizes) */
   serverOptions?: import('@grpc/grpc-js').ChannelOptions;
-
-  /** Build a per-connection context object based on client metadata */
-  beforeConnect?: (args: {
-    metadata: import('@grpc/grpc-js').Metadata;
-  }) => Ctx | Promise<Ctx>;
-
-  /** App-level window: limit number of in-flight posts until specific acks arrive */
-  maxInFlight?: number;               // e.g., 128
-  releaseOn?: (keyof Receive)[];      // e.g., ['ping']
+  beforeConnect?: (args: { metadata: import('@grpc/grpc-js').Metadata }) => Ctx | Promise<Ctx>;
+  maxInFlight?: number;
+  releaseOn?: (keyof Receive)[];
 }
 ```
 
 ---
 
-## Interop with Go (bi-directional)
+## Interop with Go
 
 - TS ↔ TS, TS ↔ Go, Go ↔ Go all work the same way.
 - Go repo: https://github.com/acoBOYZ/grpc-pipe-go  
@@ -267,39 +186,46 @@ const server = new GrpcPipeServer({
 
 ---
 
-## Benchmarks (100k msgs, ~9KB JSON-equivalent payload, no compression)
+## Benchmarks
 
-### Protobuf
+### 3 TS servers → 1 TS client (protobuf no compress)
+```
+Messages sent: 99999
+Messages received: 99999
+Min latency: 25 ms
+Avg latency: 2501.44 ms
+Max latency: 4931 ms
+Throughput: 20169 msg/s
+```
 
-| Topology                                | Messages | Min (ms) | Avg (ms) | Max (ms) | Throughput |
-|-----------------------------------------|---------:|---------:|---------:|---------:|-----------:|
-| **3× Go servers → 1 Go client**         | 3×33,333 | 0–1      | 6.86–7.74| 28–31    | ~24.2–24.7k msg/s per server |
-| **3× Go servers → 1 TS client**         | 99,999   | 21       | 2613     | 5192     | 19,186 msg/s |
-| **3× TS servers → 1 Go client**         | 3×33,333 | 1        | 71.5–82.6| 101–123  | ~11.5–13.1k msg/s per server |
-| **3× TS servers → 1 TS client**         | 99,999   | 23       | 2498     | 4949     | 20,108 msg/s |
+### 3 TS servers → 1 TS client (protobuf gzip)
+```
+Messages sent: 99999
+Messages received: 99999
+Min latency: 28 ms
+Avg latency: 3768.98 ms
+Max latency: 7522 ms
+Throughput: 13240 msg/s
+```
 
-### JSON (TS↔TS)
-
-| Topology                        | Messages | Min (ms) | Avg (ms) | Max (ms) |
-|--------------------------------|---------:|---------:|---------:|---------:|
-| **3× TS servers → 1 TS client**| 99,999   | 62       | 2626     | 5117     |
-
-> Notes  
-> • Payload shape: user profile with nested settings/stats + 10 posts (IDs, titles, ~50× content repeats, tags, etc.).  
-> • Numbers above reflect **end-to-end** latency including app work and gRPC-JS overhead. Go↔Go shows the upper bound of what the pipe can do on the same hardware.
+### 3 TS servers → 1 TS client (protobuf snappy)
+```
+Messages sent: 99999
+Messages received: 99999
+Min latency: 22 ms
+Avg latency: 2628.33 ms
+Max latency: 5224 ms
+Throughput: 19084 msg/s
+```
 
 ---
 
 ## Tips
 
-- **Prefer Protobuf** in production (lower CPU, bandwidth, and GC pressure).
-- **Tune keepalive** (client & server options above) to your infra/LBs.
-- For high-rate request/reply, set an **app-level window**:
-  - Client: `maxInFlight: 128, releaseOn: ['pong']`
-  - Server: `maxInFlight: 128, releaseOn: ['ping']`
-- **Backpressure**: if you don’t use app windowing, the pipe will still pause when the transport’s writable buffer fills.
-- **Debug logs**: if you wired the internal logger, enable with an env var (for example):  
-  `GRPC_PIPE_DEBUG=pipe:* bun run dev`
+- Prefer **Protobuf** in production.
+- Use `compression: 'snappy'` for faster compression than gzip.
+- Tune keepalive for your infra.
+- Use `maxInFlight` + `releaseOn` to prevent overload.
 
 ---
 
