@@ -13,7 +13,7 @@ import { Deque } from './Deque.js';
  *
  * It manages:
  * - **Schema-aware serialization** (Protobuf via {@link SchemaRegistry} or JSON fallback)
- * - **Optional gzip compression** for outbound payloads
+ * - **Optional snappy/gzip compression** for outbound payloads
  * - **Backpressure detection** with an internal message queue
  * - **Application-level in-flight throttling** for request/response flows
  * - **Async processing queue** for incoming messages
@@ -171,7 +171,7 @@ export class PipeHandler<SendMap, ReceiveMap, Context extends object = {}> {
    * Sends a message of the given type and payload.
    *
    * - Encodes with Protobuf if a schema is registered, otherwise falls back to JSON.
-   * - Compresses payload with gzip if enabled.
+   * - Compresses payload with snappy/gzip if enabled.
    * - Respects application-level in-flight gating if `maxInFlight` is set.
    * - Respects transport-level backpressure if no in-flight limit is set.
    *

@@ -53,7 +53,7 @@ export class GrpcPipeClient<SendMap, ReceiveMap> extends TypedEventEmitter<GrpcP
    * @param options.metadata - Optional metadata to include in the initial connection.
    * @param options.tls - Enable TLS, optionally with a root cert.
    * @param options.channelOptions - gRPC channel options for advanced tuning.
-   * @param options.compression - Enable gzip compression for outgoing messages.
+   * @param options.compression - Enable snappy/gzip compression for outgoing messages.
    * @param options.backpressureThresholdBytes - Apply backpressure when transport buffer exceeds this size.
    * @param options.heartbeat - Enables automatic heartbeats (interval or boolean).
    */

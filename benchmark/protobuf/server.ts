@@ -14,7 +14,7 @@ const server = new GrpcPipeServer<ServerSend, ServerReceive, ServerContext>({
   host: '0.0.0.0',
   port,
   schema: benchmarkServerRegistry,
-  compression: { codec: 'gzip' },
+  compression: true,
   maxInFlight: 128,
   releaseOn: ['ping'],
   serverOptions: {

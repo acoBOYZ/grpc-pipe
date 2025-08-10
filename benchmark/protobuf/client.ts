@@ -17,7 +17,7 @@ const connections = new Map<string, PipeHandler<ClientSend, ClientReceive>>();
 const pending = new Map<string, number>();
 const latencies: number[] = [];
 
-const messagesPerClient = 33_333;
+const messagesPerClient = 333;
 const totalMessagesToSend = messagesPerClient * serverAddresses.length;
 
 let totalReceived = 0;
@@ -32,7 +32,7 @@ function connectToServer(address: string) {
     address,
     schema: benchmarkClientRegistry,
     reconnectDelayMs: 2000,
-    compression: { codec: 'gzip' },
+    compression: true,
     maxInFlight: 128,
     releaseOn: ['pong'],
     channelOptions: {

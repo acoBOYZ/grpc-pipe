@@ -39,7 +39,7 @@ export class GrpcPipeServer<SendMap, ReceiveMap, Ctx extends object = {}> extend
    * @param options.onConnect - Optional hook fired after `PipeHandler` is created but before `'connection'` is emitted.
    * @param options.tls - TLS credentials for secure connections. If omitted, server uses insecure transport.
    * @param options.serverOptions - Additional gRPC server/channel options (e.g., keepalive settings).
-   * @param options.compression - Enables gzip compression for messages.
+   * @param options.compression - Enables snappy/gzip compression for messages.
    * @param options.backpressureThresholdBytes - Buffer size before applying write backpressure.
    * @param options.heartbeat - Enable heartbeat pings (boolean or interval object).
    */

@@ -5,7 +5,7 @@
 
 - ✨ JSON fallback (no schema required)
 - 🚀 Protobuf support (zero-copy encode/decode)
-- 📦 Built-in gzip/snappy compression (opt-in)
+- 📦 Built-in snappy/gzip compression (opt-in)
 - 🧠 Smart backpressure + optional app-level in-flight window
 - 🔄 Auto-reconnect with exponential backoff
 - ⚡ Fastq-based concurrent dispatch
@@ -49,7 +49,7 @@ const server = new GrpcPipeServer<ServerSend, ServerReceive, ServerContext>({
   host: '0.0.0.0',
   port: 50061,
   // schema: registry,
-  compression: 'snappy', // 'gzip' | 'snappy' | false
+  compression: { codec: 'snappy' }, // false | { codec: 'snappy' | 'gzip' } (true means 'snappy')
   maxInFlight: 128,
   releaseOn: ['ping'],
   serverOptions: {
@@ -92,7 +92,7 @@ interface ClientReceive { pong: { message: string } }
 const client = new GrpcPipeClient<ClientSend, ClientReceive>({
   address: 'localhost:50061',
   // schema: registry,
-  compression: 'snappy', // 'gzip' | 'snappy' | false
+  compression: { codec: 'snappy' }, // false | { codec: 'snappy' | 'gzip' } (true means 'snappy')
   reconnectDelayMs: 2000,
   maxInFlight: 128,
   releaseOn: ['pong'],
@@ -147,7 +147,7 @@ const server = new GrpcPipeServer({
 {
   address: string;
   schema?: SchemaRegistry<Send, Receive>;
-  compression?: false | { codec: 'gzip' | 'snappy' };
+  compression?: false | { codec: 'snappy' | 'gzip' };
   backpressureThresholdBytes?: number;
   heartbeat?: boolean | { intervalMs?: number };
   reconnectDelayMs?: number;
@@ -166,7 +166,7 @@ const server = new GrpcPipeServer({
   host?: string;
   port: number;
   schema?: SchemaRegistry<Send, Receive>;
-  compression?: false | { codec: 'gzip' | 'snappy' };
+  compression?: false | { codec: 'snappy' | 'gzip' };
   backpressureThresholdBytes?: number;
   heartbeat?: boolean | { intervalMs?: number };
   serverOptions?: import('@grpc/grpc-js').ChannelOptions;
@@ -226,6 +226,7 @@ Throughput: 19084 msg/s
 - Use `compression: 'snappy'` for faster compression than gzip.
 - Tune keepalive for your infra.
 - Use `maxInFlight` + `releaseOn` to prevent overload.
+- You can use `metadata` do transfer jwt, cookies or any information you need from clients to your servers (json only)
 
 ---
 

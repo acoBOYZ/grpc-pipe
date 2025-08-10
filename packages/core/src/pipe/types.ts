@@ -7,8 +7,8 @@ export interface PipeHandlerOptions<ReceiveMap> {
   /**
    * Compression:
    *  - false (default)           → disabled
-   *  - true                      → gzip
-   *  - { codec: 'gzip'|'snappy'} → explicit object form
+   *  - true                      → snappy
+   *  - { codec: 'snappy'|'gzip'} → explicit object form
    */
   compression?: CompressionSetting;
 

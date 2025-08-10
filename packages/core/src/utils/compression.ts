@@ -8,7 +8,7 @@ const gzipAsync = {
   inflate: promisify(zlib.gunzip),
 };
 
-export type CompressionCodec = 'gzip' | 'snappy';
+export type CompressionCodec = 'snappy' | 'gzip';
 export type CompressionSetting = boolean | { codec: CompressionCodec };
 
 export function isCompressionEnabled(
@@ -31,7 +31,7 @@ export async function compress(
 ): Promise<Uint8Array> {
   if (!setting) return buf;
 
-  const codec = setting === true ? 'gzip' : setting.codec;
+  const codec = setting === true ? 'snappy' : setting.codec;
 
   if (codec === 'gzip') {
     const out = await gzipAsync.deflate(Buffer.from(buf));
@@ -48,7 +48,7 @@ export function decompress(
 ): Uint8Array {
   if (!setting) return buf;
 
-  const codec = setting === true ? 'gzip' : setting.codec;
+  const codec = setting === true ? 'snappy' : setting.codec;
 
   if (codec === 'gzip') {
     const out = zlib.gunzipSync(Buffer.from(buf));
