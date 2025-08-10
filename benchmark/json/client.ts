@@ -12,9 +12,9 @@ interface ClientReceive {
 }
 
 const serverAddresses = [
-  'localhost:50051',
-  'localhost:50052',
-  'localhost:50053',
+  'localhost:50061',
+  'localhost:50062',
+  'localhost:50063',
 ];
 
 const connections = new Map<string, PipeHandler<ClientSend, ClientReceive>>();
@@ -34,7 +34,7 @@ function connectToServer(address: string) {
   const client = new GrpcPipeClient<ClientSend, ClientReceive>({
     address,
     reconnectDelayMs: 2000,
-    compression: { codec: 'snappy' },
+    compression: false,
     maxInFlight: 128,
     releaseOn: ['pong'],
     channelOptions: {
