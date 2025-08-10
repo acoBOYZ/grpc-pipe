@@ -17,41 +17,47 @@
 ## Install
 
 ```bash
-npm i @grpc-pipe/core
-# or
-bun add @grpc-pipe/core
+npm i @grpc-pipe/core @grpc-pipe/server @grpc-pipe/client
+```
+```bash
+bun add @grpc-pipe/core @grpc-pipe/server @grpc-pipe/client
 ```
 
 ---
 
 ## Quick Start (Protobuf)
 
-Below uses a schema registry for **type-safe** encode/decode. If you skip `schema`, it falls back to JSON automatically.
+Below uses a schema registry for **type-safe** encode/decode. If you skip `schema`, it falls back to JSON automatically but still typed from protobuf.
 
 ### Server
 
 ```ts
-import { GrpcPipeServer } from '@grpc-pipe/core';
+import type { InferReceive, InferSend } from '@grpc-pipe/server';
+import { GrpcPipeServer } from '@grpc-pipe/server';
+import { createSchemaRegistry } from '@grpc-pipe/core';
+import { Ping, Pong } from './genereted-proto-js';
 
-interface ServerSend { pong: { message: string } }
-interface ServerReceive { ping: { message: string } }
+// Server schema
+const registry = createSchemaRegistry({
+  send: {
+    pong: Pong,
+  },
+  receive: {
+    ping: Ping,
+  },
+});
 
-// import { createSchemaRegistry } from '@grpc-pipe/core';
-// import { Ping, Pong } from './gen/your_pb.js';
-// const registry = createSchemaRegistry<ServerSend, ServerReceive>({
-//   send:   { pong: Pong },
-//   receive:{ ping: Ping },
-// });
-
+type ServerSend = InferSend<typeof registry>;
+type ServerReceive = InferReceive<typeof registry>;
 type ServerContext = { clientId?: string };
 
 const server = new GrpcPipeServer<ServerSend, ServerReceive, ServerContext>({
   host: '0.0.0.0',
   port: 50061,
-  // schema: registry,
+  schema: registry,
   compression: { codec: 'snappy' }, // false | { codec: 'snappy' | 'gzip' } (true means 'snappy')
   maxInFlight: 128,
-  releaseOn: ['ping'],
+  releaseOn: ['ping'], // typed from registry
   serverOptions: {
     'grpc.keepalive_time_ms': 25_000,
     'grpc.keepalive_timeout_ms': 10_000,
@@ -61,41 +67,51 @@ const server = new GrpcPipeServer<ServerSend, ServerReceive, ServerContext>({
     'grpc.max_send_message_length': 64 * 1024 * 1024,
     'grpc.max_receive_message_length': 64 * 1024 * 1024,
   },
-  beforeConnect: ({ metadata }) => ({ clientId: String(metadata.get('clientId')) }),
+  beforeConnect: ({ metadata }) => ({ // typed from registry
+    clientId: String(metadata.get('clientId')) 
+    }),
 });
 
 server.on('connection', (pipe) => {
   console.log('[SERVER] client connected', pipe.context);
-  pipe.on('ping', (data) => {
-    pipe.post('pong', { message: data.message });
+  // all pipe callback keys and payload also typed from registry
+  pipe.on('ping', (payload) => {
+    pipe.post('pong', { message: payload.message });
   });
 });
 
+server.on('disconnected', console.warning);
 server.on('error', console.error);
 ```
 
 ### Client
 
 ```ts
-import { GrpcPipeClient } from '@grpc-pipe/core';
+import type { InferReceive, InferSend } from '@grpc-pipe/server';
+import { GrpcPipeClient } from '@grpc-pipe/server';
+import { createSchemaRegistry } from '@grpc-pipe/core';
+import { Ping, Pong } from './genereted-proto-js';
 
-interface ClientSend { ping: { message: string } }
-interface ClientReceive { pong: { message: string } }
+// Client schema
+export const registry = createSchemaRegistry({
+  send: {
+    ping: Ping,
+  },
+  receive: {
+    pong: Pong,
+  },
+});
 
-// import { createSchemaRegistry } from '@grpc-pipe/core';
-// import { Ping, Pong } from './gen/your_pb.js';
-// const registry = createSchemaRegistry<ClientSend, ClientReceive>({
-//   send:   { ping: Ping },
-//   receive:{ pong: Pong },
-// });
+type ClientSend = InferSend<typeof registry>;
+type ClientReceive = InferReceive<typeof registry>;
 
 const client = new GrpcPipeClient<ClientSend, ClientReceive>({
   address: 'localhost:50061',
-  // schema: registry,
+  schema: registry,
   compression: { codec: 'snappy' }, // false | { codec: 'snappy' | 'gzip' } (true means 'snappy')
   reconnectDelayMs: 2000,
   maxInFlight: 128,
-  releaseOn: ['pong'],
+  releaseOn: ['pong'], // typed from registry
   channelOptions: {
     'grpc.keepalive_time_ms': 25_000,
     'grpc.keepalive_timeout_ms': 10_000,
@@ -110,6 +126,7 @@ const client = new GrpcPipeClient<ClientSend, ClientReceive>({
 
 client.on('connected', (pipe) => {
   console.log('[CLIENT] connected; serialization:', pipe.serialization);
+  // all pipe callback keys and payload also typed from registry
   pipe.on('pong', (data) => {
     console.log('got pong:', data);
   });
@@ -128,13 +145,58 @@ client.on('error', console.error);
 ## JSON Fallback (no schema)
 
 ```ts
-const client = new GrpcPipeClient({
-  address: 'localhost:50061',
-});
+/* GRPC SERVER */
+// server types
+interface ServerSend {
+  pong: { message: UserProfile };
+}
+interface ServerReceive {
+  ping: { message: UserProfile };
+}
 
-const server = new GrpcPipeServer({
+const server = new GrpcPipeServer<ServerSend, ServerReceive>({
+  host: 'localhost',
   port: 50061,
 });
+
+// Track connected clients
+const clients = new Set<any>();
+
+// all pipe callback keys and payload also typed
+server.on('connection', (pipe) => {
+  console.log(`[SERVER ${port}] New client connected.`);
+  clients.add(pipe);
+  pipe.on('ping', (data) => {
+    pipe.post('pong', { message: data.message });
+  });
+});
+
+server.on('error', (err) => ...);
+
+/* GRPC SERVER */
+// client types
+interface ClientSend {
+  ping: { message: UserProfile };
+}
+interface ClientReceive {
+  pong: { message: UserProfile };
+}
+
+const client = new GrpcPipeClient<ClientSend, ClientReceive>({
+  address: 'localhost:50061',
+  reconnectDelayMs: 3_000,
+});
+
+// all pipe callback keys and payload also typed
+client.on('connected', (pipe: PipeHandler<ClientSend, ClientReceive>) => {
+  console.log(`[CLIENT] Connected to ${address}`);
+  pipe.on('pong', (data) => {
+    // incoming data 
+});
+
+client.on('disconnected', () => ...);
+
+client.on('error', (err) => ...);
 ```
 
 ---
@@ -171,8 +233,13 @@ const server = new GrpcPipeServer({
   heartbeat?: boolean | { intervalMs?: number };
   serverOptions?: import('@grpc/grpc-js').ChannelOptions;
   beforeConnect?: (args: { metadata: import('@grpc/grpc-js').Metadata }) => Ctx | Promise<Ctx>;
+  onConnect?: (pipe: PipeHandler<any, any>) => void | Promise<void>;
   maxInFlight?: number;
   releaseOn?: (keyof Receive)[];
+  tls?: {
+    cert: Buffer | string;
+    key: Buffer | string;
+  };
 }
 ```
 
@@ -198,7 +265,7 @@ Max latency: 4931 ms
 Throughput: 20169 msg/s
 ```
 
-### 3 TS servers → 1 TS client (protobuf gzip)
+### 3 TS servers → 1 TS client (protobuf gzip %94 compress rate)
 ```
 Messages sent: 99999
 Messages received: 99999
@@ -208,7 +275,7 @@ Max latency: 7522 ms
 Throughput: 13240 msg/s
 ```
 
-### 3 TS servers → 1 TS client (protobuf snappy)
+### 3 TS servers → 1 TS client (protobuf snappy %91 compress rate)
 ```
 Messages sent: 99999
 Messages received: 99999
@@ -225,7 +292,7 @@ Throughput: 19084 msg/s
 - Prefer **Protobuf** in production.
 - Use `compression: 'snappy'` for faster compression than gzip.
 - Tune keepalive for your infra.
-- Use `maxInFlight` + `releaseOn` to prevent overload.
+- Use `maxInFlight` + `releaseOn` to prevent overload selected typed data.
 - You can use `metadata` do transfer jwt, cookies or any information you need from clients to your servers (json only)
 
 ---
